@@ -16,7 +16,9 @@ import { NavigationLayout } from "./layouts";
 import { ActivityPage } from "./pages/ActivityPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { EmulatorPage } from "./pages/EmulatorPage";
+import { FileBrowserPage } from "./pages/FileBrowserPage";
 import { FilePage } from "./pages/FilePage";
+import { FileManagerPage } from "./pages/FileManagerPage";
 import { GitStatusPage } from "./pages/GitStatusPage";
 import { GlobalSessionsPage } from "./pages/GlobalSessionsPage";
 import { InboxPage } from "./pages/InboxPage";
@@ -69,6 +71,8 @@ createRoot(rootElement).render(
                 element={<Navigate to="/sessions" replace />}
               />
               <Route path="/git-status" element={<GitStatusPage />} />
+              <Route path="/file-manager" element={<FileManagerPage />} />
+              <Route path="/file-manager/:projectId" element={<FileBrowserPage />} />
               <Route path="/devices" element={<EmulatorPage />} />
               <Route path="/devices/:deviceId" element={<EmulatorPage />} />
               <Route path="/new-session" element={<NewSessionPage />} />

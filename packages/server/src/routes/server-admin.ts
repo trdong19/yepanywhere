@@ -1,4 +1,29 @@
+import { createReadStream, type Stats } from "node:fs";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  normalize,
+  relative,
+  resolve,
+} from "node:path";
+import { createInterface } from "node:readline";
 import { Hono } from "hono";
+import { highlightFile } from "../highlighting/index.js";
+import { renderMarkdownToHtml } from "../augments/markdown-augments.js";
 import { markDevReloadRequested } from "../dev-reload-signal.js";
 import type { NotificationService } from "../notifications/index.js";
 import type { Supervisor } from "../supervisor/Supervisor.js";
@@ -35,6 +60,240 @@ export function createServerAdminRoutes(deps: ServerAdminDeps): Hono {
     }, 100);
 
     return response;
+  });
+
+  /**
+   * GET /api/server/browse-dirs?path=/some/dir
+   * List directories at the given path for project path autocomplete.
+   */
+  routes.get("/browse-dirs", async (c) => {
+    let dirPath = c.req.query("path") || homedir();
+
+    // Expand ~ to home directory
+    if (dirPath === "~") {
+      dirPath = homedir();
+    } else if (dirPath.startsWith("~/")) {
+      dirPath = join(homedir(), dirPath.slice(2));
+    }
+
+    // Resolve to absolute path
+    const resolved = isAbsolute(dirPath) ? resolve(dirPath) : resolve(homedir(), dirPath);
+
+    try {
+      const entries = await readdir(resolved, { withFileTypes: true });
+      const dirs = await Promise.all(
+        entries
+          .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(async (entry) => {
+            const fullPath = join(resolved, entry.name);
+            // Check if it's a git repo (has .git dir)
+            try {
+              const s = await stat(join(fullPath, ".git"));
+              return { name: entry.name, path: fullPath, isGitRepo: s.isDirectory() };
+            } catch {
+              return { name: entry.name, path: fullPath, isGitRepo: false };
+            }
+          }),
+      );
+
+      return c.json({ path: resolved, entries: dirs });
+    } catch (err: any) {
+      return c.json({ error: err.message || "Failed to read directory" }, 400);
+    }
+  });
+
+  // ── Standalone File Manager APIs ──────────────────────────────────
+
+  const TEXT_EXTENSIONS = new Set([
+    ".txt", ".md", ".ts", ".tsx", ".js", ".jsx", ".json", ".html", ".css",
+    ".scss", ".yaml", ".yml", ".toml", ".sh", ".py", ".rb", ".go", ".rs",
+    ".java", ".c", ".h", ".cpp", ".hpp", ".cs", ".swift", ".php", ".lua",
+    ".sql", ".xml", ".svg", ".env", ".gitignore", ".dockerfile", ".makefile",
+    ".vue", ".svelte", ".log", ".csv", ".lock", ".ini", ".conf", ".cfg",
+  ]);
+
+  function isTextFile(filePath: string): boolean {
+    const ext = extname(filePath).toLowerCase();
+    return ext ? TEXT_EXTENSIONS.has(ext) : false;
+  }
+
+  function getMimeType(filePath: string): string {
+    const ext = extname(filePath).toLowerCase();
+    const map: Record<string, string> = {
+      ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+      ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+      ".pdf": "application/pdf", ".zip": "application/zip",
+      ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".woff2": "font/woff2",
+    };
+    return map[ext] ?? "application/octet-stream";
+  }
+
+  function isPathInsideDirectory(filePath: string, directory: string): boolean {
+    const rel = relative(resolve(directory), resolve(filePath));
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  }
+
+  async function resolveSafePath(requestedPath: string): Promise<string | null> {
+    let p = requestedPath;
+    if (p === "~") p = homedir();
+    else if (p.startsWith("~/")) p = join(homedir(), p.slice(2));
+    const resolved = isAbsolute(p) ? resolve(p) : resolve(homedir(), p);
+    return (await realpath(resolved).catch(() => null)) ?? resolved;
+  }
+
+  /**
+   * GET /files/list?path=...
+   */
+  routes.get("/files/list", async (c) => {
+    const dirPath = await resolveSafePath(c.req.query("path") || "/");
+    if (!dirPath) return c.json({ error: "Invalid path" }, 400);
+
+    let dirStats: Stats;
+    try { dirStats = await stat(dirPath); } catch {
+      return c.json({ error: "Path not found" }, 404);
+    }
+    if (!dirStats.isDirectory()) return c.json({ error: "Not a directory" }, 400);
+
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    const result = await Promise.all(
+      entries
+        .filter(e => !e.name.startsWith("."))
+        .sort((a, b) => {
+          if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+        .map(async entry => {
+          const fullPath = resolve(dirPath, entry.name);
+          const s = await stat(fullPath).catch(() => null);
+          return {
+            name: entry.name,
+            isDir: entry.isDirectory(),
+            size: s?.size ?? 0,
+            path: fullPath,
+          };
+        }),
+    );
+    return c.json({ entries: result });
+  });
+
+  /**
+   * GET /files?path=...&highlight=true
+   */
+  routes.get("/files", async (c) => {
+    const filePath = await resolveSafePath(c.req.query("path") || "");
+    if (!filePath) return c.json({ error: "Invalid path" }, 400);
+
+    let stats: Stats;
+    try { stats = await stat(filePath); } catch {
+      return c.json({ error: "File not found" }, 404);
+    }
+    if (!stats.isFile()) return c.json({ error: "Not a file" }, 400);
+
+    const isText = isTextFile(filePath);
+    const response: Record<string, unknown> = {
+      metadata: { path: filePath, size: stats.size, mimeType: getMimeType(filePath), isText },
+    };
+
+    if (isText && stats.size <= 2 * 1024 * 1024) {
+      try {
+        const content = await readFile(filePath, "utf-8");
+        response.content = content;
+        if (c.req.query("highlight") === "true") {
+          const result = await highlightFile(content, filePath);
+          if (result) response.highlightedHtml = result.html;
+          const ext = extname(filePath).toLowerCase();
+          if (ext === ".md" || ext === ".markdown") {
+            try {
+              response.renderedMarkdownHtml = await renderMarkdownToHtml(content, {
+                localFileBasePath: dirname(filePath),
+              });
+            } catch { /* ignore */ }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    return c.json(response);
+  });
+
+  /**
+   * POST /files/create
+   */
+  routes.post("/files/create", async (c) => {
+    let body: { kind: string; name: string; parent: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!body.name || !body.parent) return c.json({ error: "Missing name or parent" }, 400);
+    if (body.name.includes("/") || body.name.includes("\\")) return c.json({ error: "Invalid name" }, 400);
+
+    const parentPath = await resolveSafePath(body.parent);
+    if (!parentPath) return c.json({ error: "Invalid parent" }, 400);
+    const newPath = resolve(parentPath, body.name);
+
+    try {
+      if (body.kind === "dir") await mkdir(newPath, { recursive: true });
+      else await writeFile(newPath, "", "utf-8");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true, path: newPath });
+  });
+
+  /**
+   * PUT /files
+   */
+  routes.put("/files", async (c) => {
+    let body: { path: string; content: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!body.path || body.content === undefined) return c.json({ error: "Missing path or content" }, 400);
+
+    const filePath = await resolveSafePath(body.path);
+    if (!filePath) return c.json({ error: "Invalid path" }, 400);
+
+    try { await writeFile(filePath, body.content, "utf-8"); }
+    catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true });
+  });
+
+  /**
+   * DELETE /files?path=...
+   */
+  routes.delete("/files", async (c) => {
+    const filePath = await resolveSafePath(c.req.query("path") || "");
+    if (!filePath) return c.json({ error: "Invalid path" }, 400);
+    if (resolve(filePath) === "/") return c.json({ error: "Cannot delete root" }, 400);
+
+    try { await rm(filePath, { recursive: true }); }
+    catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true });
+  });
+
+  /**
+   * POST /files/rename
+   */
+  routes.post("/files/rename", async (c) => {
+    let body: { path: string; newName: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!body.path || !body.newName) return c.json({ error: "Missing path or newName" }, 400);
+    if (body.newName.includes("/") || body.newName.includes("\\")) return c.json({ error: "Invalid name" }, 400);
+
+    const oldPath = await resolveSafePath(body.path);
+    if (!oldPath) return c.json({ error: "Invalid path" }, 400);
+    const newPath = resolve(dirname(oldPath), body.newName);
+
+    try { await rename(oldPath, newPath); }
+    catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to rename";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true, path: newPath });
   });
 
   return routes;

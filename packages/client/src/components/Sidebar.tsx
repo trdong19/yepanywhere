@@ -669,6 +669,13 @@ export function Sidebar({
               onClick={onNavigate}
               basePath={basePath}
             />
+            <SidebarNavItem
+              to="/file-manager"
+              icon={SidebarIcons.fileManager}
+              label={t("sidebarFileManager")}
+              onClick={onNavigate}
+              basePath={basePath}
+            />
             {capabilities.includes("git-status") && (
               <SidebarNavItem
                 to="/git-status"
