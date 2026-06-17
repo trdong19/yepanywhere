@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { fetchJSON } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { ProjectCard } from "../components/ProjectCard";
 import { useInboxContext } from "../contexts/InboxContext";
@@ -9,6 +10,12 @@ import { useRemoteBasePath } from "../hooks/useRemoteBasePath";
 import { useI18n } from "../i18n";
 import { MainContent, useNavigationLayout } from "../layouts";
 import type { Project } from "../types";
+
+interface DirEntry {
+  name: string;
+  path: string;
+  isGitRepo: boolean;
+}
 
 export function ProjectsPage() {
   const { t } = useI18n();
@@ -24,6 +31,105 @@ export function ProjectsPage() {
   );
   const navigate = useNavigate();
   const basePath = useRemoteBasePath();
+
+  // Directory autocomplete state
+  const [dirSuggestions, setDirSuggestions] = useState<DirEntry[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  const fetchDirSuggestions = useCallback(async (path: string) => {
+    const queryPath = path.trim() || "/";
+    setLoadingSuggestions(true);
+    try {
+      const data = await fetchJSON<{ path: string; entries: DirEntry[] }>(
+        `/server/browse-dirs?path=${encodeURIComponent(queryPath)}`,
+      );
+      setDirSuggestions(data.entries);
+      setShowSuggestions(data.entries.length > 0);
+      setSelectedSuggestion(-1);
+    } catch {
+      setDirSuggestions([]);
+      setShowSuggestions(false);
+    }
+    setLoadingSuggestions(false);
+  }, []);
+
+  const handlePathChange = useCallback(
+    (value: string) => {
+      setNewProjectPath(value);
+      setSelectedSuggestion(-1);
+
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        // Auto-complete: if empty, list root; if ends with /, list that directory
+        // Otherwise list the parent directory
+        if (!value.trim()) {
+          void fetchDirSuggestions("/");
+          return;
+        }
+        const lastSlash = value.lastIndexOf("/");
+        const dirToList = lastSlash > 0 ? value.slice(0, lastSlash) || "/" : "/";
+        void fetchDirSuggestions(dirToList);
+      }, 300);
+    },
+    [fetchDirSuggestions],
+  );
+
+  const selectSuggestion = useCallback(
+    (entry: DirEntry) => {
+      setNewProjectPath(entry.path + "/");
+      setShowSuggestions(false);
+      setSelectedSuggestion(-1);
+      // Immediately show subdirectories
+      void fetchDirSuggestions(entry.path);
+    },
+    [fetchDirSuggestions],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!showSuggestions || dirSuggestions.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedSuggestion((prev) =>
+          prev < dirSuggestions.length - 1 ? prev + 1 : 0,
+        );
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedSuggestion((prev) =>
+          prev > 0 ? prev - 1 : dirSuggestions.length - 1,
+        );
+      } else if (e.key === "Tab" || e.key === "Enter") {
+        if (selectedSuggestion >= 0 && selectedSuggestion < dirSuggestions.length) {
+          e.preventDefault();
+          selectSuggestion(dirSuggestions[selectedSuggestion]!);
+        }
+      } else if (e.key === "Escape") {
+        setShowSuggestions(false);
+      }
+    },
+    [showSuggestions, dirSuggestions, selectedSuggestion, selectSuggestion],
+  );
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const { openSidebar, isWideScreen, toggleSidebar, isSidebarCollapsed } =
     useNavigationLayout();
@@ -135,7 +241,10 @@ export function ProjectsPage() {
               <button
                 type="button"
                 className="inbox-refresh-button"
-                onClick={() => setShowAddForm(true)}
+                onClick={() => {
+                  setShowAddForm(true);
+                  void fetchDirSuggestions("/");
+                }}
               >
                 <svg
                   width="16"
@@ -154,14 +263,48 @@ export function ProjectsPage() {
                 {t("projectsAdd")}
               </button>
             ) : (
-              <form onSubmit={handleAddProject} className="add-project-form">
+              <form onSubmit={handleAddProject} className="add-project-form" style={{ position: "relative" }}>
                 <input
+                  ref={inputRef}
                   type="text"
                   value={newProjectPath}
-                  onChange={(e) => setNewProjectPath(e.target.value)}
+                  onChange={(e) => handlePathChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => {
+                    if (dirSuggestions.length > 0) setShowSuggestions(true);
+                    else void fetchDirSuggestions(newProjectPath || "/");
+                  }}
                   placeholder={t("projectsAddPlaceholder")}
                   disabled={adding}
+                  autoComplete="off"
                 />
+                {showSuggestions && dirSuggestions.length > 0 && (
+                  <div ref={suggestionsRef} className="dir-suggestions-dropdown">
+                    {dirSuggestions.map((entry, i) => (
+                      <div
+                        key={entry.path}
+                        className={`dir-suggestion-item ${i === selectedSuggestion ? "selected" : ""}`}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectSuggestion(entry);
+                        }}
+                        onMouseEnter={() => setSelectedSuggestion(i)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span className="dir-suggestion-name">{entry.name}</span>
+                        {entry.isGitRepo && (
+                          <span className="dir-suggestion-badge">git</span>
+                        )}
+                        <span className="dir-suggestion-path">{entry.path}</span>
+                      </div>
+                    ))}
+                    {loadingSuggestions && (
+                      <div className="dir-suggestion-loading">Loading...</div>
+                    )}
+                  </div>
+                )}
                 <div className="add-project-actions">
                   <button
                     type="submit"
