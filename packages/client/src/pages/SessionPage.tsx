@@ -628,7 +628,7 @@ function SessionPageContent({
     const urlTailTurns = parsePositiveIntegerParam(params.get("tailTurns"));
     const urlTailFrom = params.get("tailFrom")?.trim() || undefined;
     return {
-      tailTurns: urlTailTurns ?? 2,
+      tailTurns: urlTailTurns ?? 30,
       tailFrom: urlTailFrom,
       explicitTail: urlTailTurns !== undefined || urlTailFrom !== undefined,
     };
