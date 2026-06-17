@@ -205,6 +205,7 @@ interface UserMessagesFABProps {
   hasOlderMessages?: boolean;
   loadingOlder?: boolean;
   onLoadOlderMessages?: () => void;
+  totalUserTurns?: number;
 }
 
 function UserMessagesFABComponent({
@@ -214,6 +215,7 @@ function UserMessagesFABComponent({
   hasOlderMessages,
   loadingOlder,
   onLoadOlderMessages,
+  totalUserTurns,
 }: UserMessagesFABProps) {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
@@ -221,7 +223,9 @@ function UserMessagesFABComponent({
   const handleOpen = useCallback(() => setIsOpen(true), []);
   const handleClose = useCallback(() => setIsOpen(false), []);
 
-  if (!visible || messages.length === 0) return null;
+  const displayCount = totalUserTurns ?? messages.length;
+
+  if (!visible || displayCount === 0) return null;
 
   return (
     <>
@@ -232,7 +236,7 @@ function UserMessagesFABComponent({
         aria-label={t("userMessagesButtonLabel")}
         title={t("userMessagesButtonLabel")}
       >
-        {messages.length}
+        {displayCount}
       </button>
       <UserMessagesSheet
         messages={messages}

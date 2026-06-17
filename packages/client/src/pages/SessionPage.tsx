@@ -625,14 +625,15 @@ function SessionPageContent({
   const initialProvider = navState?.initialProvider;
   const clientTailParams = useMemo(() => {
     const params = new URLSearchParams(location.search);
+    const urlTailTurns = parsePositiveIntegerParam(params.get("tailTurns"));
+    const urlTailFrom = params.get("tailFrom")?.trim() || undefined;
     return {
-      tailTurns: parsePositiveIntegerParam(params.get("tailTurns")),
-      tailFrom: params.get("tailFrom")?.trim() || undefined,
+      tailTurns: urlTailTurns ?? 2,
+      tailFrom: urlTailFrom,
+      explicitTail: urlTailTurns !== undefined || urlTailFrom !== undefined,
     };
   }, [location.search]);
-  const clientTailActive =
-    clientTailParams.tailTurns !== undefined ||
-    clientTailParams.tailFrom !== undefined;
+  const clientTailActive = clientTailParams.explicitTail;
 
   const updateClientTailParams = useCallback(
     (update: { tailTurns?: number; tailFrom?: string }) => {
@@ -3933,6 +3934,7 @@ function SessionPageContent({
                   loadingOlder={loadingOlder}
                   onLoadOlderMessages={loadOlderMessages}
                   clientTailActive={clientTailActive}
+                  totalUserTurns={pagination?.totalUserTurns}
                 />
               </AgentContentProvider>
             </SessionMetadataProvider>

@@ -886,6 +886,8 @@ interface Props {
   onLoadOlderMessages?: () => void;
   /** Whether the client transcript is intentionally loaded from a recent tail */
   clientTailActive?: boolean;
+  /** Total user turns in the full session (from server pagination) */
+  totalUserTurns?: number;
 }
 
 function PencilIcon({ size = 14 }: { size?: number }) {
@@ -1091,6 +1093,7 @@ export const MessageList = memo(function MessageList({
   loadingOlder = false,
   onLoadOlderMessages,
   clientTailActive = false,
+  totalUserTurns,
 }: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -3379,6 +3382,7 @@ export const MessageList = memo(function MessageList({
             hasOlderMessages={hasOlderMessages}
             loadingOlder={loadingOlder}
             onLoadOlderMessages={onLoadOlderMessages}
+            totalUserTurns={totalUserTurns}
           />
         </div>
       </div>
