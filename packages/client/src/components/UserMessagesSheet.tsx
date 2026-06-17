@@ -223,9 +223,7 @@ function UserMessagesFABComponent({
   const handleOpen = useCallback(() => setIsOpen(true), []);
   const handleClose = useCallback(() => setIsOpen(false), []);
 
-  const displayCount = totalUserTurns ?? messages.length;
-
-  if (!visible || displayCount === 0) return null;
+  if (!visible || messages.length === 0) return null;
 
   return (
     <>
@@ -236,7 +234,7 @@ function UserMessagesFABComponent({
         aria-label={t("userMessagesButtonLabel")}
         title={t("userMessagesButtonLabel")}
       >
-        {displayCount}
+        {messages.length}
       </button>
       <UserMessagesSheet
         messages={messages}
