@@ -1,0 +1,318 @@
+/* Floating Action Button */
+.user-messages-fab {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  z-index: 100;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 4px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.user-messages-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.user-messages-fab:active {
+  transform: scale(0.95);
+}
+
+/* Backdrop */
+.user-messages-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Sheet */
+.user-messages-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 70vh;
+  background: var(--bg-surface, #fff);
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.3s ease;
+  transition: transform 0.1s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Header */
+.user-messages-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px 16px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  cursor: grab;
+  user-select: none;
+}
+
+.user-messages-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-muted, #999);
+  margin-bottom: 12px;
+}
+
+.user-messages-header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-messages-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin: 0;
+}
+
+.user-messages-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-messages-sort-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e5e5e5);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #333);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.user-messages-sort-button:hover {
+  background: var(--bg-hover, #f5f5f5);
+  border-color: var(--text-muted, #999);
+}
+
+.user-messages-count {
+  font-size: 13px;
+  color: var(--text-muted, #999);
+}
+
+/* List */
+.user-messages-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  overscroll-behavior: contain;
+}
+
+.user-messages-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted, #999);
+  font-size: 14px;
+}
+
+/* Message Item */
+.user-message-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.user-message-item:hover {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.user-message-item:active {
+  background: var(--bg-active, #e5e5e5);
+}
+
+.user-message-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted, #999);
+  min-width: 45px;
+  padding-top: 2px;
+}
+
+.user-message-preview {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Load Older Messages Button */
+.user-messages-load-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% - 40px);
+  margin: 12px 20px;
+  padding: 12px 16px;
+  background: var(--bg-hover, #f5f5f5);
+  border: 1px dashed var(--border-color, #e5e5e5);
+  border-radius: 8px;
+  color: var(--text-primary, #333);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.user-messages-load-older:hover {
+  background: var(--bg-active, #e5e5e5);
+  border-color: var(--text-muted, #999);
+}
+
+.user-messages-load-older:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.user-messages-load-older .spinning {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .user-messages-sheet {
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .user-messages-fab {
+    right: 8px;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    font-size: 10px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .user-messages-fab {
+    background: #dc3545;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .user-messages-fab:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+
+  .user-messages-backdrop {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  .user-messages-sheet {
+    background: var(--bg-surface, #1a1a1a);
+    border-color: var(--border-color, #333);
+  }
+
+  .user-messages-header {
+    border-color: var(--border-color, #333);
+  }
+
+  .user-messages-handle {
+    background: var(--text-muted, #666);
+  }
+
+  .user-messages-title {
+    color: var(--text-primary, #fff);
+  }
+
+  .user-messages-sort-button {
+    border-color: var(--border-color, #333);
+    background: var(--bg-surface, #1a1a1a);
+    color: var(--text-primary, #fff);
+  }
+
+  .user-messages-sort-button:hover {
+    background: var(--bg-hover, #2a2a2a);
+    border-color: var(--text-muted, #666);
+  }
+
+  .user-messages-count {
+    color: var(--text-muted, #999);
+  }
+
+  .user-message-item:hover {
+    background: var(--bg-hover, #2a2a2a);
+  }
+
+  .user-message-item:active {
+    background: var(--bg-active, #333);
+  }
+
+  .user-message-time {
+    color: var(--text-muted, #999);
+  }
+
+  .user-message-preview {
+    color: var(--text-primary, #fff);
+  }
+
+  .user-messages-load-older {
+    background: var(--bg-hover, #2a2a2a);
+    border-color: var(--border-color, #333);
+    color: var(--text-primary, #fff);
+  }
+
+  .user-messages-load-older:hover {
+    background: var(--bg-active, #333);
+    border-color: var(--text-muted, #666);
+  }
+}

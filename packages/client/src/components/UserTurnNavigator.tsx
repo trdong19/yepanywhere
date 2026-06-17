@@ -41,6 +41,7 @@ interface Props {
   onSearchMatchSelect?: (id: string, targetId: string) => void;
   onTrimAnchor?: (id: string) => void;
   searchState?: UserTurnNavSearchState | null;
+  isScrolledToBottom?: boolean;
 }
 
 interface UserTurnMarker extends UserTurnNavAnchor {
@@ -534,6 +535,7 @@ export const UserTurnNavigator = memo(function UserTurnNavigator({
   onSearchMatchSelect,
   onTrimAnchor,
   searchState,
+  isScrolledToBottom = true,
 }: Props) {
   const [layout, setLayout] = useState<UserTurnNavLayout | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -643,6 +645,13 @@ export const UserTurnNavigator = memo(function UserTurnNavigator({
 
     const updatePointerReveal = (event: PointerEvent) => {
       if (searchState) return;
+
+      // 如果不在底部，直接激活，不需要鼠标悬停
+      if (!isScrolledToBottom) {
+        setRailActive(true);
+        return;
+      }
+
       const rect = scrollContainer.getBoundingClientRect();
       const inVerticalRange =
         event.clientY >= rect.top && event.clientY <= rect.bottom;
@@ -656,7 +665,7 @@ export const UserTurnNavigator = memo(function UserTurnNavigator({
       });
     };
     const hideRail = () => {
-      if (!searchState) {
+      if (!searchState && isScrolledToBottom) {
         setRailActive(false);
       }
     };
@@ -670,7 +679,7 @@ export const UserTurnNavigator = memo(function UserTurnNavigator({
       scrollContainer.removeEventListener("pointermove", updatePointerReveal);
       scrollContainer.removeEventListener("pointerleave", hideRail);
     };
-  }, [messageListRef, searchState]);
+  }, [messageListRef, searchState, isScrolledToBottom]);
 
   useEffect(() => {
     if (!shouldMeasure) {

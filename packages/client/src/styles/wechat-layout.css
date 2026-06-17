@@ -1,0 +1,37 @@
+/* Simple right-aligned user messages */
+.message-user-prompt {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  width: fit-content !important;
+  max-width: 80% !important;
+}
+
+.user-prompt-container {
+  display: flex !important;
+  justify-content: flex-end !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  width: 100% !important;
+}
+
+/* Move action buttons below the message */
+.user-prompt-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-1) !important;
+  margin-top: 4px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.12s ease !important;
+}
+
+.user-prompt-container:hover .user-prompt-actions,
+.user-prompt-container:focus-within .user-prompt-actions {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure metadata takes full width */
+.user-prompt-container > .user-prompt-metadata {
+  width: 100% !important;
+}

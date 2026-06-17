@@ -1274,5 +1274,16 @@
   "remoteSetupErrorCustomYaRequired": "请输入自定义 YA URL",
   "remoteSetupErrorSaveFailed": "保存失败",
   "remoteSetupErrorUpdateFailed": "更新失败",
-  "publicShareRetrying": "正在重新连接以分享..."
+  "publicShareRetrying": "正在重新连接以分享...",
+  "userMessagesTitle": "用户消息",
+  "userMessagesCount": "条消息",
+  "userMessagesEmpty": "暂无用户消息",
+  "userMessagesButtonLabel": "查看用户消息",
+  "userMessagesSortNewest": "最新在前",
+  "userMessagesSortOldest": "最早在前",
+  "userMessagesLoadOlder": "加载更早的消息",
+  "userMessagesLoadingOlder": "加载中...",
+  "wechatLayoutToggle": "切换布局",
+  "wechatLayoutTitle": "微信布局",
+  "defaultLayoutTitle": "默认布局"
 }

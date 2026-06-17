@@ -1337,5 +1337,16 @@
   "remoteSetupErrorCustomYaRequired": "Custom YA URL is required",
   "remoteSetupErrorSaveFailed": "Failed to save",
   "remoteSetupErrorUpdateFailed": "Failed to update",
-  "publicShareRetrying": "Reconnecting to share..."
+  "publicShareRetrying": "Reconnecting to share...",
+  "userMessagesTitle": "User Messages",
+  "userMessagesCount": "messages",
+  "userMessagesEmpty": "No user messages yet",
+  "userMessagesButtonLabel": "View user messages",
+  "userMessagesSortNewest": "Sort newest first",
+  "userMessagesSortOldest": "Sort oldest first",
+  "userMessagesLoadOlder": "Load older messages",
+  "userMessagesLoadingOlder": "Loading...",
+  "wechatLayoutToggle": "Switch layout",
+  "wechatLayoutTitle": "WeChat Layout",
+  "defaultLayoutTitle": "Default Layout"
 }

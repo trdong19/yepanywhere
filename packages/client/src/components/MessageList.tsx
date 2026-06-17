@@ -60,6 +60,10 @@ import {
   type UserTurnNavSearchState,
 } from "./UserTurnNavigator";
 import { CopyTextButton } from "./ui/CopyTextButton";
+import {
+  type UserMessageItem,
+  UserMessagesFAB,
+} from "./UserMessagesSheet";
 
 /**
  * Groups consecutive assistant items (text, thinking, tool_call) into turns.
@@ -1518,6 +1522,31 @@ export const MessageList = memo(function MessageList({
     }
     return anchors;
   }, [displayRenderItems]);
+
+  // Extract user messages for the mobile user messages sheet
+  const userMessagesList = useMemo<UserMessageItem[]>(() => {
+    const messages: UserMessageItem[] = [];
+    let elementIndex = 0;
+    for (const item of displayRenderItems) {
+      if (item.type !== "user_prompt" || item.isSubagent) {
+        continue;
+      }
+      const preview = getSearchableUserTurnPreview(item);
+      if (!preview) {
+        continue;
+      }
+      const timestampMs = getLatestMessageTimestampMs(item.sourceMessages) ?? Date.now();
+      messages.push({
+        id: item.id,
+        preview,
+        timestampMs,
+        elementIndex,
+      });
+      elementIndex++;
+    }
+    // 按时间倒序排列，最新的在前
+    return messages.sort((a, b) => b.timestampMs - a.timestampMs);
+  }, [displayRenderItems]);
   const searchReady =
     userTurnSearch.active &&
     normalizeSearchText(userTurnSearch.query).length >= 2;
@@ -2147,6 +2176,13 @@ export const MessageList = memo(function MessageList({
       allowThinkingDeltas: true,
     });
   }, [forceScrollToCurrent]);
+
+  const handleJumpToUserMessage = useCallback(
+    (messageId: string) => {
+      scrollToRenderId(messageId, "smooth", "center", true);
+    },
+    [scrollToRenderId],
+  );
 
   const findQueuedContextRenderId = useCallback(
     (queuedTimestampMs: number): string | null => {
@@ -2844,6 +2880,7 @@ export const MessageList = memo(function MessageList({
         onSearchMatchSelect={selectUserTurnSearchMatch}
         onTrimAnchor={onTrimBeforeUserMessage}
         searchState={userTurnNavSearchState}
+        isScrolledToBottom={isScrolledToBottom}
       />
       {searchPanelTarget && searchPanel
         ? createPortal(searchPanel, searchPanelTarget)
@@ -3329,12 +3366,21 @@ export const MessageList = memo(function MessageList({
             <span className="system-message-text">Compacting context...</span>
           </div>
         )}
-        <ProcessingIndicator
-          isProcessing={isProcessing}
-          thinkingItemsVisible={thinkingItemsVisible}
-          hasThinkingItems={hasThinkingItems}
-          onToggleThinkingItemsVisible={toggleThinkingItemsVisible}
-        />
+        <div style={{ position: 'relative' }}>
+          <ProcessingIndicator
+            isProcessing={isProcessing}
+            thinkingItemsVisible={thinkingItemsVisible}
+            hasThinkingItems={hasThinkingItems}
+            onToggleThinkingItemsVisible={toggleThinkingItemsVisible}
+          />
+          <UserMessagesFAB
+            messages={userMessagesList}
+            onJumpToMessage={handleJumpToUserMessage}
+            hasOlderMessages={hasOlderMessages}
+            loadingOlder={loadingOlder}
+            onLoadOlderMessages={onLoadOlderMessages}
+          />
+        </div>
       </div>
     </>
   );
