@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { fetchJSON } from "../api/client";
+import { api, fetchJSON } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
-import { useRemoteBasePath } from "../hooks/useRemoteBasePath";
 import { useI18n } from "../i18n";
 import { MainContent, useNavigationLayout } from "../layouts";
 import "./FileBrowserPage.css";
@@ -22,6 +21,18 @@ interface TreeProps {
   onSelect: (path: string, isDir: boolean) => void;
   onDelete: (path: string) => void;
   onRefresh: () => void;
+  refreshKey: number;
+  clipboardPath: string | null;
+  clipboardMode: "copy" | "cut" | null;
+  onCopy: (path: string) => void;
+  onCut: (path: string) => void;
+  onPaste: (destDir: string) => void;
+  onDragStart: (path: string) => void;
+  onDragEnd: () => void;
+  onDrop: (destDir: string) => void;
+  draggingPath: string | null;
+  isLast: boolean;
+  parentGuides: boolean[];
 }
 
 function FileIcon({ isDir }: { isDir: boolean }) {
@@ -40,7 +51,27 @@ function FileIcon({ isDir }: { isDir: boolean }) {
   );
 }
 
-function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }: TreeProps) {
+function isImageMime(path: string): boolean {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(ext);
+}
+
+function isAncestorOf(ancestor: string, path: string) {
+  const a = ancestor.endsWith("/") ? ancestor : ancestor + "/";
+  return path === ancestor || path.startsWith(a);
+}
+
+function formatSize(bytes: number) {
+  if (bytes === 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
+}
+
+// Global: close any open context menu before opening a new one
+let closeCurrentMenu: (() => void) | null = null;
+
+function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh, refreshKey, clipboardPath, clipboardMode, onCopy, onCut, onPaste, onDragStart, onDragEnd, onDrop, draggingPath, isLast, parentGuides }: TreeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,12 +80,14 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
   const [newName, setNewName] = useState(entry.name);
   const [creating, setCreating] = useState<"file" | "dir" | null>(null);
   const [createName, setCreateName] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const isSelected = selectedPath === entry.path;
+  const isDragging = draggingPath === entry.path;
 
-  const loadChildren = useCallback(async () => {
+  const loadChildren = useCallback(async (showLoading = true) => {
     if (!entry.isDir) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const data = await fetchJSON<{ entries: DirEntry[] }>(
         `/server/files/list?path=${encodeURIComponent(entry.path)}`,
@@ -63,6 +96,13 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
     } catch { /* ignore */ }
     setLoading(false);
   }, [entry.isDir, entry.path]);
+
+  // Re-load children when refreshKey changes (but keep expanded state)
+  useEffect(() => {
+    if (expanded && entry.isDir) {
+      void loadChildren(false); // don't show loading — keep tree intact
+    }
+  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleExpand = useCallback(async () => {
     if (!entry.isDir) {
@@ -74,11 +114,21 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
     onSelect(entry.path, true);
   }, [entry.isDir, entry.path, expanded, loadChildren, onSelect]);
 
+  // Close menu on click anywhere, or when another menu opens
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
+    const close = () => setContextMenu(null);
+    // Register globally so new right-click closes old menu
+    closeCurrentMenu?.();
+    closeCurrentMenu = close;
+    const handler = (e: MouseEvent) => {
+      if (e.button === 0) close();
+    };
     document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    return () => {
+      document.removeEventListener("click", handler);
+      if (closeCurrentMenu === close) closeCurrentMenu = null;
+    };
   }, [contextMenu]);
 
   useEffect(() => {
@@ -116,25 +166,74 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
     setCreateName("");
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "";
-    const units = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
+  // Check if `child` is an ancestor of (or equal to) `path`
+  const isAncestorOf = (ancestor: string, path: string) => {
+    const a = ancestor.endsWith("/") ? ancestor : ancestor + "/";
+    const p = path;
+    return p === ancestor || p.startsWith(a);
   };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!entry.isDir) return;
+    if (!draggingPath || isAncestorOf(draggingPath, entry.path)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(true);
+  };
+
+  const handleDragLeave = () => setDragOver(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (!entry.isDir) return;
+    if (!draggingPath || isAncestorOf(draggingPath, entry.path)) return;
+    onDrop(entry.path);
+  };
+
+  // Build indentation guides
+  const guides = [...parentGuides, !isLast];
 
   return (
     <div className="tree-node">
       <div
-        className={`tree-row ${isSelected ? "selected" : ""}`}
-        style={{ paddingLeft: `${depth * 16 + 4}px` }}
+        className={`tree-row ${isSelected ? "selected" : ""} ${isDragging ? "tree-dragging" : ""} ${dragOver ? "tree-drag-over" : ""}`}
+        style={{ paddingLeft: `${depth * 20 + 4}px` }}
         onClick={toggleExpand}
-        onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
+        draggable={!renaming && !creating}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", entry.path);
+          onDragStart(entry.path);
+        }}
+        onDragEnd={onDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeCurrentMenu?.(); // close any existing menu first
+          setContextMenu({ x: e.clientX, y: e.clientY });
+        }}
       >
-        {entry.isDir && (
+        {/* Indentation guides */}
+        {depth > 0 && (
+          <span className="tree-guides" aria-hidden="true">
+            {guides.map((showLine, i) => (
+              <span
+                key={i}
+                className={`tree-guide ${showLine ? "tree-guide-line" : ""}`}
+              />
+            ))}
+          </span>
+        )}
+        {entry.isDir ? (
           <span className={`tree-chevron ${expanded ? "expanded" : ""}`}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
           </span>
+        ) : (
+          <span className="tree-spacer" />
         )}
         <FileIcon isDir={entry.isDir} />
         {renaming ? (
@@ -149,7 +248,14 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
       </div>
 
       {expanded && creating && (
-        <div className="tree-row" style={{ paddingLeft: `${(depth + 1) * 16 + 4}px` }}>
+        <div className="tree-row" style={{ paddingLeft: `${(depth + 1) * 20 + 4}px` }}>
+          <span className="tree-guides" aria-hidden="true">
+            {guides.map((showLine, i) => (
+              <span key={i} className={`tree-guide ${showLine ? "tree-guide-line" : ""}`} />
+            ))}
+            <span className="tree-guide" />
+          </span>
+          <span className="tree-spacer" />
           <FileIcon isDir={creating === "dir"} />
           <input ref={inputRef} className="tree-inline-input" placeholder={creating === "dir" ? "新建文件夹..." : "新建文件..."}
             value={createName} onChange={e => setCreateName(e.target.value)} onBlur={handleCreateSubmit}
@@ -159,13 +265,39 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
       )}
 
       {expanded && (
-        <div className="tree-children">
+        <div
+          className="tree-children"
+          onDragOver={(e) => {
+            if (!entry.isDir || !draggingPath || isAncestorOf(draggingPath, entry.path)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            // Only clear highlight when actually leaving the children container
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setDragOver(false);
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (!entry.isDir || !draggingPath || isAncestorOf(draggingPath, entry.path)) return;
+            onDrop(entry.path);
+          }}
+        >
           {loading ? (
-            <div className="tree-loading" style={{ paddingLeft: `${(depth + 1) * 16 + 4}px` }}>加载中...</div>
+            <div className="tree-loading" style={{ paddingLeft: `${(depth + 1) * 20 + 4}px` }}>加载中...</div>
           ) : (
-            children.map(child => (
+            children.map((child, idx) => (
               <TreeNode key={child.path} entry={child} depth={depth + 1}
-                selectedPath={selectedPath} onSelect={onSelect} onDelete={onDelete} onRefresh={onRefresh} />
+                selectedPath={selectedPath} onSelect={onSelect} onDelete={onDelete} onRefresh={onRefresh}
+                refreshKey={refreshKey}
+                clipboardPath={clipboardPath} clipboardMode={clipboardMode}
+                onCopy={onCopy} onCut={onCut} onPaste={onPaste}
+                onDragStart={onDragStart} onDragEnd={onDragEnd} onDrop={onDrop}
+                draggingPath={draggingPath}
+                isLast={idx === children.length - 1} parentGuides={guides} />
             ))
           )}
         </div>
@@ -180,6 +312,25 @@ function TreeNode({ entry, depth, selectedPath, onSelect, onDelete, onRefresh }:
               <div className="ctx-divider" />
             </>
           )}
+          <button onClick={async () => {
+            // For files use parent dir, for dirs use the dir itself
+            const dirPath = entry.isDir ? entry.path : entry.path.substring(0, entry.path.lastIndexOf("/")) || "/";
+            setContextMenu(null);
+            try {
+              const result = await api.addProject(dirPath);
+              window.location.href = `/new-session?projectId=${encodeURIComponent(result.project.id)}`;
+            } catch (err) {
+              console.error("Failed to create session:", err);
+            }
+          }}>在此目录新建会话</button>
+          <button onClick={() => { onCopy(entry.path); setContextMenu(null); }}>复制</button>
+          <button onClick={() => { onCut(entry.path); setContextMenu(null); }}>剪切</button>
+          {clipboardPath && entry.isDir && (
+            <button onClick={() => { onPaste(entry.path); setContextMenu(null); }}>
+              粘贴 {clipboardMode === "cut" ? "✂" : "📋"}
+            </button>
+          )}
+          <div className="ctx-divider" />
           <button onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
           <button onClick={() => { navigator.clipboard.writeText(entry.path); setContextMenu(null); }}>复制路径</button>
           <div className="ctx-divider" />
@@ -197,12 +348,20 @@ interface FileTreeHandle {
 const FileTree = forwardRef<FileTreeHandle, {
   selectedPath: string | null;
   onSelect: (path: string, isDir: boolean) => void;
-}>(function FileTree({ selectedPath, onSelect }, ref) {
+  clipboardPath: string | null;
+  clipboardMode: "copy" | "cut" | null;
+  onCopy: (path: string) => void;
+  onCut: (path: string) => void;
+  onPaste: (destDir: string) => void;
+}>(function FileTree({ selectedPath, onSelect, clipboardPath, clipboardMode, onCopy, onCut, onPaste }, ref) {
   const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [rootMenu, setRootMenu] = useState<{ x: number; y: number } | null>(null);
+  const [draggingPath, setDraggingPath] = useState<string | null>(null);
 
-  const loadRoot = useCallback(async () => {
-    setLoading(true);
+  const loadRoot = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await fetchJSON<{ entries: DirEntry[] }>(
         `/server/files/list?path=/`,
@@ -212,26 +371,89 @@ const FileTree = forwardRef<FileTreeHandle, {
     setLoading(false);
   }, []);
 
-  useImperativeHandle(ref, () => ({ refresh: loadRoot }), [loadRoot]);
-  useEffect(() => { loadRoot(); }, [loadRoot]);
+  const handleRefresh = useCallback(() => {
+    void loadRoot(false); // don't show loading — keep tree intact
+    setRefreshKey(k => k + 1);
+  }, [loadRoot]);
+
+  useImperativeHandle(ref, () => ({ refresh: handleRefresh }), [handleRefresh]);
+  useEffect(() => { loadRoot(); }, [loadRoot]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!rootMenu) return;
+    const close = () => setRootMenu(null);
+    closeCurrentMenu?.();
+    closeCurrentMenu = close;
+    const handler = (e: MouseEvent) => {
+      if (e.button === 0) close();
+    };
+    document.addEventListener("click", handler);
+    return () => {
+      document.removeEventListener("click", handler);
+      if (closeCurrentMenu === close) closeCurrentMenu = null;
+    };
+  }, [rootMenu]);
 
   const handleDelete = useCallback(async (path: string) => {
     if (!confirm(`确定删除 ${path}？`)) return;
     try {
       await fetchJSON(`/server/files?path=${encodeURIComponent(path)}`, { method: "DELETE" });
-      loadRoot();
+      handleRefresh();
     } catch { /* ignore */ }
-  }, [loadRoot]);
+  }, [handleRefresh]);
+
+  const handleDrop = useCallback(async (destDir: string) => {
+    if (!draggingPath) return;
+    try {
+      await fetchJSON("/server/files/move", {
+        method: "POST",
+        body: JSON.stringify({ source: draggingPath, destDir }),
+      });
+      handleRefresh();
+    } catch { /* ignore */ }
+    setDraggingPath(null);
+  }, [draggingPath, handleRefresh]);
+
+  // Drop on the tree background = move to root
+  const handleTreeDrop = useCallback((e: React.DragEvent) => {
+    if (e.target === e.currentTarget) {
+      e.preventDefault();
+      handleDrop("/");
+    }
+  }, [handleDrop]);
 
   return (
-    <div className="file-browser-tree">
+    <div className="file-browser-tree"
+      onContextMenu={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          closeCurrentMenu?.();
+          setRootMenu({ x: e.clientX, y: e.clientY });
+        }
+      }}
+      onDragOver={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
+      onDrop={handleTreeDrop}
+    >
       {loading ? (
         <div className="tree-loading" style={{ padding: "12px" }}>加载中...</div>
       ) : (
-        rootEntries.map(entry => (
+        rootEntries.map((entry, idx) => (
           <TreeNode key={entry.path} entry={entry} depth={0}
-            selectedPath={selectedPath} onSelect={onSelect} onDelete={handleDelete} onRefresh={loadRoot} />
+            selectedPath={selectedPath} onSelect={onSelect} onDelete={handleDelete} onRefresh={handleRefresh}
+            refreshKey={refreshKey}
+            clipboardPath={clipboardPath} clipboardMode={clipboardMode}
+            onCopy={onCopy} onCut={onCut} onPaste={onPaste}
+            onDragStart={setDraggingPath} onDragEnd={() => setDraggingPath(null)} onDrop={handleDrop}
+            draggingPath={draggingPath}
+            isLast={idx === rootEntries.length - 1} parentGuides={[]} />
         ))
+      )}
+      {rootMenu && clipboardPath && (
+        <div className="tree-context-menu" style={{ left: rootMenu.x, top: rootMenu.y }}>
+          <button onClick={() => { onPaste("/"); setRootMenu(null); }}>
+            粘贴到根目录 {clipboardMode === "cut" ? "✂" : "📋"}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -242,7 +464,6 @@ const FileTree = forwardRef<FileTreeHandle, {
 export function FileManagerPage() {
   const { t } = useI18n();
   const { isWideScreen, openSidebar, toggleSidebar, isSidebarCollapsed } = useNavigationLayout();
-  const basePath = useRemoteBasePath();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState("");
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
@@ -252,8 +473,32 @@ export function FileManagerPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [isBinary, setIsBinary] = useState(false);
+  const [isImage, setIsImage] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [clipboardPath, setClipboardPath] = useState<string | null>(null);
+  const [clipboardMode, setClipboardMode] = useState<"copy" | "cut" | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
   const fileTreeRef = useRef<FileTreeHandle>(null);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(200, Math.min(600, startWidth + (ev.clientX - startX)));
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [sidebarWidth]);
 
   const loadFile = useCallback(async (path: string) => {
     setLoading(true);
@@ -261,6 +506,7 @@ export function FileManagerPage() {
     setHighlightedHtml(null);
     setRenderedMarkdown(null);
     setIsBinary(false);
+    setIsImage(false);
     setViewMode("preview");
     try {
       const data = await fetchJSON<{
@@ -276,6 +522,7 @@ export function FileManagerPage() {
         setRenderedMarkdown(data.renderedMarkdownHtml ?? null);
       } else {
         setIsBinary(true);
+        setIsImage(isImageMime(path));
         setFileContent("");
       }
     } catch {
@@ -304,6 +551,29 @@ export function FileManagerPage() {
     setSaving(false);
   }, [selectedFile]);
 
+  const handleCopy = useCallback((path: string) => {
+    setClipboardPath(path);
+    setClipboardMode("copy");
+  }, []);
+
+  const handleCut = useCallback((path: string) => {
+    setClipboardPath(path);
+    setClipboardMode("cut");
+  }, []);
+
+  const handlePaste = useCallback(async (destDir: string) => {
+    if (!clipboardPath || !clipboardMode) return;
+    const endpoint = clipboardMode === "cut" ? "/server/files/move" : "/server/files/copy";
+    try {
+      await fetchJSON(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ source: clipboardPath, destDir }),
+      });
+      if (clipboardMode === "cut") setClipboardPath(null);
+      fileTreeRef.current?.refresh();
+    } catch { /* ignore */ }
+  }, [clipboardPath, clipboardMode]);
+
   const getLanguage = (path: string) => {
     const ext = path.split(".").pop()?.toLowerCase() ?? "";
     const map: Record<string, string> = {
@@ -329,7 +599,7 @@ export function FileManagerPage() {
       <div className="fb-page">
         {sidebarOpen && <div className="fb-backdrop" onClick={() => setSidebarOpen(false)} />}
 
-        <div className={`fb-sidebar ${sidebarOpen ? "fb-sidebar-open" : ""}`}>
+        <div className={`fb-sidebar ${sidebarOpen ? "fb-sidebar-open" : ""}`} style={{ width: `${sidebarWidth}px` }}>
           <div className="fb-sidebar-topbar">
             <span className="fb-sidebar-topbar-title">文件管理</span>
             <div className="fb-sidebar-topbar-actions">
@@ -341,7 +611,10 @@ export function FileManagerPage() {
               <button className="fb-sidebar-topbar-btn" title="关闭" onClick={() => setSidebarOpen(false)}>✕</button>
             </div>
           </div>
-          <FileTree ref={fileTreeRef} selectedPath={selectedFile} onSelect={handleFileSelect} />
+          <FileTree ref={fileTreeRef} selectedPath={selectedFile} onSelect={handleFileSelect}
+            clipboardPath={clipboardPath} clipboardMode={clipboardMode}
+            onCopy={handleCopy} onCut={handleCut} onPaste={handlePaste} />
+          <div className="fb-sidebar-resize-handle" onMouseDown={handleResizeStart} />
         </div>
 
         <div className="fb-editor">
@@ -368,9 +641,21 @@ export function FileManagerPage() {
               <div className="fb-editor-body">
                 {loading ? (
                   <div className="fb-loading">加载中...</div>
+                ) : isBinary && isImage ? (
+                  <div className="fb-image-preview">
+                    <img
+                      src={`/api/server/files/raw?path=${encodeURIComponent(selectedFile)}`}
+                      alt={selectedFile.split("/").pop() ?? selectedFile}
+                    />
+                  </div>
                 ) : isBinary ? (
                   <div className="fb-empty">
                     <p>二进制文件 — {getLanguage(selectedFile)}</p>
+                    <a
+                      className="fb-download-link"
+                      href={`/api/server/files/raw?path=${encodeURIComponent(selectedFile)}`}
+                      download
+                    >下载文件</a>
                   </div>
                 ) : viewMode === "preview" && renderedMarkdown ? (
                   <div className="fb-preview">

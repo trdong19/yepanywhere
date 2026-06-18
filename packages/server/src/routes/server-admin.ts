@@ -1,5 +1,6 @@
 import { createReadStream, type Stats } from "node:fs";
 import {
+  cp,
   mkdir,
   readFile,
   readdir,
@@ -294,6 +295,98 @@ export function createServerAdminRoutes(deps: ServerAdminDeps): Hono {
       return c.json({ error: msg }, 500);
     }
     return c.json({ ok: true, path: newPath });
+  });
+
+  /**
+   * GET /files/raw?path=...
+   * Streams a binary file with the correct Content-Type (for image preview etc.)
+   */
+  routes.get("/files/raw", async (c) => {
+    const filePath = await resolveSafePath(c.req.query("path") || "");
+    if (!filePath) return c.json({ error: "Invalid path" }, 400);
+
+    let fileStats: Stats;
+    try { fileStats = await stat(filePath); } catch {
+      return c.json({ error: "File not found" }, 404);
+    }
+    if (!fileStats.isFile()) return c.json({ error: "Not a file" }, 400);
+
+    const mime = getMimeType(filePath);
+    const data = await readFile(filePath);
+    return new Response(data, {
+      headers: {
+        "Content-Type": mime,
+        "Content-Length": String(fileStats.size),
+        "Cache-Control": "private, max-age=60",
+      },
+    });
+  });
+
+  /**
+   * POST /files/copy
+   * Copies a file or directory to a destination directory.
+   */
+  routes.post("/files/copy", async (c) => {
+    let body: { source: string; destDir: string; newName?: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!body.source || !body.destDir) return c.json({ error: "Missing source or destDir" }, 400);
+
+    const srcPath = await resolveSafePath(body.source);
+    if (!srcPath) return c.json({ error: "Invalid source" }, 400);
+    const destDir = await resolveSafePath(body.destDir);
+    if (!destDir) return c.json({ error: "Invalid destDir" }, 400);
+
+    const name = body.newName || basename(srcPath);
+    if (name.includes("/") || name.includes("\\")) return c.json({ error: "Invalid name" }, 400);
+    const destPath = resolve(destDir, name);
+
+    // Prevent copying a directory into itself
+    if (srcPath === destPath || isPathInsideDirectory(destPath, srcPath)) {
+      return c.json({ error: "Cannot copy a directory into itself" }, 400);
+    }
+
+    try {
+      const srcStats = await stat(srcPath);
+      if (srcStats.isDirectory()) {
+        await cp(srcPath, destPath, { recursive: true });
+      } else {
+        await cp(srcPath, destPath);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to copy";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true, path: destPath });
+  });
+
+  /**
+   * POST /files/move
+   * Moves (renames) a file or directory to a destination directory.
+   */
+  routes.post("/files/move", async (c) => {
+    let body: { source: string; destDir: string; newName?: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!body.source || !body.destDir) return c.json({ error: "Missing source or destDir" }, 400);
+
+    const srcPath = await resolveSafePath(body.source);
+    if (!srcPath) return c.json({ error: "Invalid source" }, 400);
+    const destDir = await resolveSafePath(body.destDir);
+    if (!destDir) return c.json({ error: "Invalid destDir" }, 400);
+
+    const name = body.newName || basename(srcPath);
+    if (name.includes("/") || name.includes("\\")) return c.json({ error: "Invalid name" }, 400);
+    const destPath = resolve(destDir, name);
+
+    if (srcPath === destPath) return c.json({ error: "Source and destination are the same" }, 400);
+    if (resolve(srcPath) === "/") return c.json({ error: "Cannot move root" }, 400);
+
+    try {
+      await rename(srcPath, destPath);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to move";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true, path: destPath });
   });
 
   return routes;
