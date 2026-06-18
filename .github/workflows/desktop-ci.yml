@@ -42,7 +42,7 @@ jobs:
             rust_target: ''
             target_triple: ''
           - platform: ubuntu-22.04
-            args: ''
+            args: '--config ''{"bundle":{"targets":["deb","rpm"]}}'''
             rust_target: ''
             target_triple: ''
 
