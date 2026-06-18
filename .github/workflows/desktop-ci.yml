@@ -40,6 +40,10 @@ jobs:
             args: ''
             rust_target: ''
             target_triple: ''
+          - platform: ubuntu-22.04
+            args: ''
+            rust_target: ''
+            target_triple: ''
 
     runs-on: ${{ matrix.platform }}
 
@@ -66,6 +70,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # --- Linux system dependencies for Tauri/WebKit ---
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -260,6 +277,7 @@ jobs:
             echo "| macOS (Apple Silicon) | [.dmg](${BASE}/YepAnywhere_${VERSION}_aarch64.dmg) |"
             echo "| macOS (Intel) | [.dmg](${BASE}/YepAnywhere_${VERSION}_x64.dmg) |"
             echo "| Windows | [.exe](${BASE}/YepAnywhere_${VERSION}_x64-setup.exe) · [.msi](${BASE}/YepAnywhere_${VERSION}_x64_en-US.msi) |"
+            echo "| Linux (x64) | [.deb](${BASE}/yepanywhere_${VERSION}_amd64.deb) · [.AppImage](${BASE}/yepanywhere_${VERSION}_amd64.AppImage) |"
           } > /tmp/release-body.md
 
           gh release edit "$TAG" --notes-file /tmp/release-body.md
