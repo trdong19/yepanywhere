@@ -2,6 +2,9 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { fetchJSON } from "../api/client";
 import "./FileBrowser.css";
 
+const LONG_PRESS_MS = 500;
+const MOVE_CANCEL_PX = 10;
+
 interface DirEntry {
   name: string;
   isDir: boolean;
@@ -46,7 +49,52 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const [creating, setCreating] = useState<"file" | "dir" | null>(null);
   const [createName, setCreateName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
   const isSelected = selectedPath === entry.path;
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartRef.current = null;
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setContextMenu({ x: touch.clientX, y: touch.clientY });
+    }, LONG_PRESS_MS);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+      clearLongPress();
+    }
+  }, [clearLongPress]);
+
+  const handleTouchEnd = useCallback(() => {
+    clearLongPress();
+  }, [clearLongPress]);
+
+  const handleClickCapture = useCallback((e: React.MouseEvent) => {
+    if (longPressTriggeredRef.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      longPressTriggeredRef.current = false;
+    }
+  }, []);
 
   const loadChildren = useCallback(async () => {
     if (!entry.isDir) return;
@@ -81,6 +129,8 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, [contextMenu]);
+
+  useEffect(() => clearLongPress, [clearLongPress]);
 
   useEffect(() => {
     if ((renaming || creating) && inputRef.current) {
@@ -132,8 +182,12 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
         role="treeitem"
         tabIndex={0}
         onClick={toggleExpand}
+        onClickCapture={handleClickCapture}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleExpand(); }}
         onContextMenu={handleContextMenu}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         {entry.isDir && (
           <span className={`tree-chevron ${expanded ? "expanded" : ""}`}>

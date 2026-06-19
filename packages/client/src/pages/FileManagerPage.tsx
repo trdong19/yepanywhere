@@ -5,6 +5,9 @@ import { useI18n } from "../i18n";
 import { MainContent, useNavigationLayout } from "../layouts";
 import "./FileBrowserPage.css";
 
+const LONG_PRESS_MS = 500;
+const MOVE_CANCEL_PX = 10;
+
 interface DirEntry {
   name: string;
   isDir: boolean;
@@ -86,11 +89,61 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
   const [createName, setCreateName] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
   const isSelected = selectedPaths.has(entry.path);
   const isDragging = draggingPath === entry.path;
 
   // Register this node in the visible order on every render
   registerVisible(entry.path);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartRef.current = null;
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      // Select the item on long-press
+      if (!selectedPaths.has(entry.path)) {
+        onSelect(entry.path, entry.isDir, "single");
+      }
+      closeCurrentMenu?.();
+      setContextMenu({ x: touch.clientX, y: touch.clientY });
+    }, LONG_PRESS_MS);
+  }, [entry.path, entry.isDir, onSelect, selectedPaths]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+      clearLongPress();
+    }
+  }, [clearLongPress]);
+
+  const handleTouchEnd = useCallback(() => {
+    clearLongPress();
+  }, [clearLongPress]);
+
+  const handleClickCapture = useCallback((e: React.MouseEvent) => {
+    if (longPressTriggeredRef.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      longPressTriggeredRef.current = false;
+    }
+  }, []);
 
   const loadChildren = useCallback(async (showLoading = true) => {
     if (!entry.isDir) return;
@@ -125,6 +178,8 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     const mode = e.shiftKey ? "range" : e.ctrlKey || e.metaKey ? "toggle" : "single";
     onSelect(entry.path, entry.isDir, mode);
   }, [entry.isDir, entry.path, onSelect, renaming, creating, toggleExpand]);
+
+  useEffect(() => clearLongPress, [clearLongPress]);
 
   // Close menu on click anywhere, or when another menu opens
   useEffect(() => {
@@ -224,6 +279,7 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         role="treeitem"
         tabIndex={0}
         onClick={handleClick}
+        onClickCapture={handleClickCapture}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleClick(e as unknown as React.MouseEvent); }}
         draggable={!renaming && !creating}
         onDragStart={(e) => {
@@ -245,6 +301,9 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
           closeCurrentMenu?.();
           setContextMenu({ x: e.clientX, y: e.clientY });
         }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         {depth > 0 && (
           <span className="tree-guides" aria-hidden="true">
