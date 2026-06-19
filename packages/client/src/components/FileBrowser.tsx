@@ -84,6 +84,7 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   // Long-press support for mobile touch devices
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
+    if (!touch) return;
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
@@ -95,6 +96,7 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
     const touch = e.touches[0];
+    if (!touch) return;
     const dx = Math.abs(touch.clientX - touchStartRef.current.x);
     const dy = Math.abs(touch.clientY - touchStartRef.current.y);
     if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
