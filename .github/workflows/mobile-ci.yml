@@ -1,0 +1,82 @@
+name: Mobile CI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'mobile-v*'
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # --- Node.js + pnpm ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      # --- Rust ---
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './packages/mobile/src-tauri -> target'
+
+      # --- Android SDK ---
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;27.0.12077973"
+
+      # --- Install frontend dependencies ---
+      - name: Install frontend dependencies
+        run: pnpm install --ignore-scripts
+
+      # --- Build Android APK ---
+      - name: Build Android APK
+        working-directory: packages/mobile
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+        run: pnpm tauri android build
+
+      # --- Upload artifacts ---
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: packages/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+
+      # --- Create release (on tag push) ---
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/mobile-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Yep Anywhere Mobile ${{ github.ref_name }}"
+          files: |
+            packages/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          generate_release_notes: true
