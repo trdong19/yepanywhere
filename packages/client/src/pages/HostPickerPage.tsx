@@ -142,8 +142,11 @@ export function HostPickerPage() {
             // Success - navigate to projects (direct mode doesn't use username URLs)
             navigate("/projects");
           } else {
-            // No session - go to direct login pre-filled
-            navigate("/login/direct");
+            // No session - go to direct login pre-filled with saved host info
+            const params = new URLSearchParams();
+            params.set("url", host.wsUrl);
+            params.set("username", host.srpUsername);
+            navigate(`/login/direct?${params.toString()}`);
           }
         }
       } catch (err) {
