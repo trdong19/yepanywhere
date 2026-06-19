@@ -1,6 +1,5 @@
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_opener::OpenerExt;
 
 /// Extract query string from an app link URL and convert to hash fragment.
 ///
@@ -31,25 +30,6 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Open external links in the default browser instead of the WebView
-            if let Some(window) = app.get_webview_window("main") {
-                let opener = app.opener().clone();
-                window.on_navigation(move |url| {
-                    let url_str = url.to_string();
-                    // Allow tauri:// and localhost URLs (the app itself)
-                    if url_str.starts_with("tauri://")
-                        || url_str.starts_with("http://localhost")
-                        || url_str.starts_with("https://localhost")
-                        || url_str.starts_with("http://127.0.0.1")
-                    {
-                        return true;
-                    }
-                    // Open external URLs in the default browser
-                    let _ = opener.open_url(&url_str, None::<&str>);
-                    false
-                });
-            }
-
             // Handle deep links that launched the app
             if let Ok(Some(urls)) = app.deep_link().get_current() {
                 let handle = app.handle().clone();

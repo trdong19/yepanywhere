@@ -25,6 +25,31 @@
         var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'verydark');
         document.documentElement.setAttribute('data-theme', theme);
       })();
+
+      // In Tauri: open external links in the default browser instead of the WebView
+      (() => {
+        if (!window.__TAURI__) return;
+        document.addEventListener('click', async (e) => {
+          const a = e.target.closest('a[href]');
+          if (!a) return;
+          const href = a.href;
+          if (!href || href.startsWith('javascript:') || href.startsWith('#') || href.startsWith('data:')) return;
+          // Allow same-origin links (the app itself)
+          if (href.startsWith(window.location.origin)) return;
+          // External link — open in default browser
+          e.preventDefault();
+          try {
+            const { openUrl } = window.__TAURI__.opener || {};
+            if (openUrl) {
+              await openUrl(href);
+            } else {
+              window.open(href, '_blank');
+            }
+          } catch (err) {
+            console.warn('[Tauri] Failed to open external URL:', err);
+          }
+        }, true);
+      })();
     </script>
   </head>
   <body>
