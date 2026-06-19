@@ -26,29 +26,42 @@
         document.documentElement.setAttribute('data-theme', theme);
       })();
 
-      // In Tauri: open external links in the default browser instead of the WebView
+      // In Tauri: intercept window.open and external links to open in default browser
       (() => {
-        if (!window.__TAURI__) return;
-        document.addEventListener('click', async (e) => {
-          const a = e.target.closest('a[href]');
-          if (!a) return;
-          const href = a.href;
-          if (!href || href.startsWith('javascript:') || href.startsWith('#') || href.startsWith('data:')) return;
-          // Allow same-origin links (the app itself)
-          if (href.startsWith(window.location.origin)) return;
-          // External link — open in default browser
-          e.preventDefault();
-          try {
-            const { openUrl } = window.__TAURI__.opener || {};
-            if (openUrl) {
-              await openUrl(href);
-            } else {
-              window.open(href, '_blank');
-            }
-          } catch (err) {
-            console.warn('[Tauri] Failed to open external URL:', err);
+        // Wait for Tauri to be available, then patch window.open
+        const setupTauriLinks = () => {
+          if (!window.__TAURI__ || !window.__TAURI__.opener) {
+            // Tauri not ready yet, retry
+            setTimeout(setupTauriLinks, 100);
+            return;
           }
-        }, true);
+          const openUrl = window.__TAURI__.opener.openUrl;
+          if (!openUrl) return;
+
+          // Override window.open to open external URLs in default browser
+          const origOpen = window.open.bind(window);
+          window.open = (url, target, features) => {
+            if (url && typeof url === 'string' && !url.startsWith(window.location.origin) && !url.startsWith('#') && !url.startsWith('data:')) {
+              openUrl(url).catch((err) => console.warn('[Tauri] openUrl failed:', err));
+              return null;
+            }
+            return origOpen(url, target, features);
+          };
+
+          // Also intercept <a> clicks for links with target="_blank"
+          document.addEventListener('click', (e) => {
+            const a = e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.href;
+            if (!href || href.startsWith('javascript:') || href.startsWith('#') || href.startsWith('data:')) return;
+            if (href.startsWith(window.location.origin)) return;
+            e.preventDefault();
+            openUrl(href).catch((err) => console.warn('[Tauri] openUrl failed:', err));
+          }, true);
+
+          console.log('[Tauri] External link handler installed');
+        };
+        setupTauriLinks();
       })();
     </script>
   </head>
