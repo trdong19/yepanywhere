@@ -67,6 +67,24 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: pnpm tauri android build
 
+      # --- Sign APK ---
+      - name: Sign APK
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > /tmp/release.keystore
+          APK_PATH=$(find packages/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release -name "*.apk" | head -1)
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore /tmp/release.keystore \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -keypass "$ANDROID_KEY_PASSWORD" \
+            "$APK_PATH" "$ANDROID_KEY_ALIAS"
+          rm -f /tmp/release.keystore
+
       # --- Upload artifacts ---
       - name: Upload APK
         uses: actions/upload-artifact@v4
