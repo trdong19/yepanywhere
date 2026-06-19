@@ -851,7 +851,7 @@ export function MessageInput({
     }
   }, [canAttach, onAttach]);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = useCallback((_e: React.DragEvent) => {
     if (!canAttach || !onAttach) return;
     dragCounterRef.current -= 1;
     if (dragCounterRef.current <= 0) {
@@ -900,6 +900,7 @@ export function MessageInput({
   return (
     <div
       className={`message-input-wrapper ${dragOver ? "drag-over" : ""}`}
+      role="group"
       onKeyDownCapture={handleComposerKeyDown}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
@@ -908,7 +909,7 @@ export function MessageInput({
     >
       {dragOver && (
         <div className="drop-overlay">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />

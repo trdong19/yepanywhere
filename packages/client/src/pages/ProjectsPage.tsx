@@ -81,7 +81,7 @@ export function ProjectsPage() {
 
   const selectSuggestion = useCallback(
     (entry: DirEntry) => {
-      setNewProjectPath(entry.path + "/");
+      setNewProjectPath(`${entry.path}/`);
       setShowSuggestions(false);
       setSelectedSuggestion(-1);
       // Immediately show subdirectories
@@ -283,6 +283,9 @@ export function ProjectsPage() {
                     {dirSuggestions.map((entry, i) => (
                       <div
                         key={entry.path}
+                        role="option"
+                        aria-selected={i === selectedSuggestion}
+                        tabIndex={-1}
                         className={`dir-suggestion-item ${i === selectedSuggestion ? "selected" : ""}`}
                         onMouseDown={(e) => {
                           e.preventDefault();

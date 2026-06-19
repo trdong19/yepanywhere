@@ -129,12 +129,15 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
       <div
         className={`tree-row ${isSelected ? "selected" : ""}`}
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
+        role="treeitem"
+        tabIndex={0}
         onClick={toggleExpand}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleExpand(); }}
         onContextMenu={handleContextMenu}
       >
         {entry.isDir && (
           <span className={`tree-chevron ${expanded ? "expanded" : ""}`}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
           </span>
         )}
         <FileIcon isDir={entry.isDir} />
@@ -183,15 +186,15 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
         <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
           {entry.isDir && (
             <>
-              <button onClick={() => { setCreating("file"); setContextMenu(null); }}>新建文件</button>
-              <button onClick={() => { setCreating("dir"); setContextMenu(null); }}>新建文件夹</button>
+              <button type="button" onClick={() => { setCreating("file"); setContextMenu(null); }}>新建文件</button>
+              <button type="button" onClick={() => { setCreating("dir"); setContextMenu(null); }}>新建文件夹</button>
               <div className="ctx-divider" />
             </>
           )}
-          <button onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
-          <button onClick={() => { navigator.clipboard.writeText(entry.path); setContextMenu(null); }}>复制路径</button>
+          <button type="button" onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
+          <button type="button" onClick={() => { navigator.clipboard.writeText(entry.path); setContextMenu(null); }}>复制路径</button>
           <div className="ctx-divider" />
-          <button className="danger" onClick={() => { onDelete(entry.path); setContextMenu(null); }}>删除</button>
+          <button type="button" className="danger" onClick={() => { onDelete(entry.path); setContextMenu(null); }}>删除</button>
         </div>
       )}
     </div>
@@ -256,8 +259,8 @@ export const FileBrowser = forwardRef<FileBrowserHandle, FileBrowserProps>(
       <div className="file-browser-header">
         <span className="file-browser-title">文件管理</span>
         <div className="file-browser-actions">
-          <button title="刷新" onClick={loadRoot}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <button type="button" title="刷新" onClick={loadRoot}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
           </button>

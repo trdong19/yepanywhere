@@ -97,8 +97,8 @@ export function createServerAdminRoutes(deps: ServerAdminDeps): Hono {
       );
 
       return c.json({ path: resolved, entries: dirs });
-    } catch (err: any) {
-      return c.json({ error: err.message || "Failed to read directory" }, 400);
+    } catch (err: unknown) {
+      return c.json({ error: err instanceof Error ? err.message : "Failed to read directory" }, 400);
     }
   });
 
@@ -302,8 +302,8 @@ export function createServerAdminRoutes(deps: ServerAdminDeps): Hono {
    */
   routes.post("/files/upload", async (c) => {
     const body = await c.req.parseBody();
-    const file = body["file"];
-    const dirPath = body["dir"];
+    const file = body.file;
+    const dirPath = body.dir;
 
     if (!file || !(file instanceof File)) return c.json({ error: "Missing file" }, 400);
     if (typeof dirPath !== "string" || !dirPath) return c.json({ error: "Missing dir" }, 400);

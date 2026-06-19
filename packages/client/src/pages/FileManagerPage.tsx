@@ -68,7 +68,7 @@ function formatSize(bytes: number) {
 }
 
 function isAncestorOf(ancestor: string, path: string) {
-  const a = ancestor.endsWith("/") ? ancestor : ancestor + "/";
+  const a = ancestor.endsWith("/") ? ancestor : `${ancestor}/`;
   return path === ancestor || path.startsWith(a);
 }
 
@@ -221,7 +221,10 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
       <div
         className={`tree-row ${isSelected ? "selected" : ""} ${isDragging ? "tree-dragging" : ""} ${dragOver ? "tree-drag-over" : ""}`}
         style={{ paddingLeft: `${depth * 20 + 4}px` }}
+        role="treeitem"
+        tabIndex={0}
         onClick={handleClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleClick(e as unknown as React.MouseEvent); }}
         draggable={!renaming && !creating}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = "move";
@@ -255,7 +258,7 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         )}
         {entry.isDir ? (
           <span className={`tree-chevron ${expanded ? "expanded" : ""}`}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
           </span>
         ) : (
           <span className="tree-spacer" />
@@ -292,6 +295,7 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
       {expanded && (
         <div
           className="tree-children"
+          role="group"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -319,13 +323,13 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
           {entry.isDir && (
             <>
-              <button onClick={() => { setCreating("file"); setContextMenu(null); }}>新建文件</button>
-              <button onClick={() => { setCreating("dir"); setContextMenu(null); }}>新建文件夹</button>
-              <button onClick={() => { onRequestUpload(entry.path); setContextMenu(null); }}>上传到此目录</button>
+              <button type="button" onClick={() => { setCreating("file"); setContextMenu(null); }}>新建文件</button>
+              <button type="button" onClick={() => { setCreating("dir"); setContextMenu(null); }}>新建文件夹</button>
+              <button type="button" onClick={() => { onRequestUpload(entry.path); setContextMenu(null); }}>上传到此目录</button>
               <div className="ctx-divider" />
             </>
           )}
-          <button onClick={async () => {
+          <button type="button" onClick={async () => {
             const dirPath = entry.isDir ? entry.path : entry.path.substring(0, entry.path.lastIndexOf("/")) || "/";
             setContextMenu(null);
             try {
@@ -335,28 +339,28 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
               console.error("Failed to create session:", err);
             }
           }}>在此目录新建会话</button>
-          <button onClick={() => { onCopy(effectivePaths); setContextMenu(null); }}>
+          <button type="button" onClick={() => { onCopy(effectivePaths); setContextMenu(null); }}>
             复制{hasMulti ? ` (${effectivePaths.length})` : ""}
           </button>
-          <button onClick={() => { onCut(effectivePaths); setContextMenu(null); }}>
+          <button type="button" onClick={() => { onCut(effectivePaths); setContextMenu(null); }}>
             剪切{hasMulti ? ` (${effectivePaths.length})` : ""}
           </button>
           {clipboardPaths.length > 0 && entry.isDir && (
-            <button onClick={() => { onPaste(entry.path); setContextMenu(null); }}>
+            <button type="button" onClick={() => { onPaste(entry.path); setContextMenu(null); }}>
               粘贴 {clipboardMode === "cut" ? "✂" : "📋"} ({clipboardPaths.length})
             </button>
           )}
           <div className="ctx-divider" />
-          <button onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
-          <button onClick={() => {
+          <button type="button" onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
+          <button type="button" onClick={() => {
             navigator.clipboard.writeText(effectivePaths.join("\n"));
             setContextMenu(null);
           }}>复制路径</button>
-          <button onClick={() => { onDownload(effectivePaths); setContextMenu(null); }}>
+          <button type="button" onClick={() => { onDownload(effectivePaths); setContextMenu(null); }}>
             下载{hasMulti ? ` (${effectivePaths.length})` : ""}
           </button>
           <div className="ctx-divider" />
-          <button className="danger" onClick={() => { onDelete(effectivePaths); setContextMenu(null); }}>
+          <button type="button" className="danger" onClick={() => { onDelete(effectivePaths); setContextMenu(null); }}>
             删除{hasMulti ? ` (${effectivePaths.length})` : ""}
           </button>
         </div>
@@ -488,6 +492,7 @@ const FileTree = forwardRef<FileTreeHandle, {
 
   return (
     <div className="file-browser-tree"
+      role="tree"
       onContextMenu={(e) => {
         if (e.target === e.currentTarget) {
           e.preventDefault();
@@ -520,7 +525,7 @@ const FileTree = forwardRef<FileTreeHandle, {
       )}
       {rootMenu && clipboardPaths.length > 0 && (
         <div className="tree-context-menu" style={{ left: rootMenu.x, top: rootMenu.y }}>
-          <button onClick={() => { onPaste("/"); setRootMenu(null); }}>
+          <button type="button" onClick={() => { onPaste("/"); setRootMenu(null); }}>
             粘贴到根目录 {clipboardMode === "cut" ? "✂" : "📋"} ({clipboardPaths.length})
           </button>
         </div>
@@ -777,31 +782,31 @@ export function FileManagerPage() {
         {selectedPaths.size > 1 && (
           <div className="fb-selection-bar">
             已选择 {selectedPaths.size} 项
-            <button className="fb-selection-clear" onClick={() => {
+            <button type="button" className="fb-selection-clear" onClick={() => {
               setSelectedPaths(new Set());
               anchorPathRef.current = null;
             }}>✕</button>
           </div>
         )}
-        {sidebarOpen && <div className="fb-backdrop" onClick={() => setSidebarOpen(false)} />}
+        {sidebarOpen && <div className="fb-backdrop" role="button" tabIndex={-1} onClick={() => setSidebarOpen(false)} onKeyDown={(e) => { if (e.key === "Escape") setSidebarOpen(false); }} />}
 
         <div className={`fb-sidebar ${sidebarOpen ? "fb-sidebar-open" : ""}`} style={{ width: `${sidebarWidth}px` }}>
           <div className="fb-sidebar-topbar">
             <span className="fb-sidebar-topbar-title">文件管理</span>
             <div className="fb-sidebar-topbar-actions">
-              <button className="fb-sidebar-topbar-btn" title={`上传到 ${uploadTargetDir}`} onClick={handleUploadClick}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <button type="button" className="fb-sidebar-topbar-btn" title={`上传到 ${uploadTargetDir}`} onClick={handleUploadClick}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
               </button>
-              <button className="fb-sidebar-topbar-btn" title="刷新" onClick={() => fileTreeRef.current?.refresh()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <button type="button" className="fb-sidebar-topbar-btn" title="刷新" onClick={() => fileTreeRef.current?.refresh()}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                 </svg>
               </button>
-              <button className="fb-sidebar-topbar-btn fb-sidebar-topbar-close" title="关闭" onClick={() => setSidebarOpen(false)}>✕</button>
+              <button type="button" className="fb-sidebar-topbar-btn fb-sidebar-topbar-close" title="关闭" onClick={() => setSidebarOpen(false)}>✕</button>
             </div>
           </div>
           <input ref={uploadInputRef} type="file" multiple style={{ display: "none" }} onChange={handleUploadInputChange} />
@@ -810,27 +815,27 @@ export function FileManagerPage() {
             onCopy={handleCopy} onCut={handleCut} onPaste={handlePaste} onDownload={handleDownload}
             onUpload={handleUpload} onRequestUpload={handleRequestUpload}
             anchorPath={anchorPathRef.current} />
-          <div className="fb-sidebar-resize-handle" onMouseDown={handleResizeStart} />
+          <div className="fb-sidebar-resize-handle" role="none" tabIndex={-1} onMouseDown={handleResizeStart} />
         </div>
 
         <div className="fb-editor">
           {selectedFile ? (
             <div className="fb-editor-container">
               <div className="fb-editor-header">
-                <button className="fb-sidebar-toggle" onClick={() => setSidebarOpen(true)} title="打开文件树">☰</button>
+                <button type="button" className="fb-sidebar-toggle" onClick={() => setSidebarOpen(true)} title="打开文件树">☰</button>
                 <span className="fb-editor-path">{selectedFile}</span>
                 <div className="fb-editor-actions">
                   {!isBinary && (
                     <>
-                      <button className={`fb-tab-btn ${viewMode === "preview" ? "active" : ""}`} onClick={() => setViewMode("preview")}>预览</button>
-                      <button className={`fb-tab-btn ${viewMode === "edit" ? "active" : ""}`} onClick={() => setViewMode("edit")}>编辑</button>
+                      <button type="button" className={`fb-tab-btn ${viewMode === "preview" ? "active" : ""}`} onClick={() => setViewMode("preview")}>预览</button>
+                      <button type="button" className={`fb-tab-btn ${viewMode === "edit" ? "active" : ""}`} onClick={() => setViewMode("edit")}>编辑</button>
                     </>
                   )}
                   {saving && <span className="fb-status">保存中...</span>}
                   {dirty && !saving && <span className="fb-status dirty">未保存</span>}
                   {!dirty && !saving && viewMode === "edit" && <span className="fb-status saved">已保存</span>}
                   {viewMode === "edit" && (
-                    <button className="fb-save-btn" onClick={() => handleSave(fileContent)} disabled={!dirty || saving} title="Ctrl+S">保存</button>
+                    <button type="button" className="fb-save-btn" onClick={() => handleSave(fileContent)} disabled={!dirty || saving} title="Ctrl+S">保存</button>
                   )}
                 </div>
               </div>
@@ -856,11 +861,13 @@ export function FileManagerPage() {
                 ) : viewMode === "preview" && renderedMarkdown ? (
                   <div className="fb-preview">
                     <div className="fb-preview-meta"><span>Markdown</span><span>{fileContent.split("\n").length} 行</span></div>
+                    {/* biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered sanitized HTML */}
                     <div className="fb-markdown" dangerouslySetInnerHTML={{ __html: renderedMarkdown }} />
                   </div>
                 ) : viewMode === "preview" && highlightedHtml ? (
                   <div className="fb-preview">
                     <div className="fb-preview-meta"><span>{getLanguage(selectedFile)}</span><span>{fileContent.split("\n").length} 行</span></div>
+                    {/* biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered sanitized HTML */}
                     <div className="fb-highlighted" dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
                   </div>
                 ) : viewMode === "preview" ? (
@@ -877,10 +884,10 @@ export function FileManagerPage() {
             </div>
           ) : (
             <div className="fb-empty">
-              <button className="fb-sidebar-toggle fb-sidebar-toggle-empty" onClick={() => setSidebarOpen(true)} title="打开文件树">
+              <button type="button" className="fb-sidebar-toggle fb-sidebar-toggle-empty" onClick={() => setSidebarOpen(true)} title="打开文件树">
                 ☰ 打开文件管理
               </button>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3" aria-hidden="true">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
               </svg>
               <p>选择文件查看</p>

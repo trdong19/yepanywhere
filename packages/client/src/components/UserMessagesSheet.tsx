@@ -122,7 +122,7 @@ function UserMessagesSheetComponent({
       : 0;
 
   return (
-    <div className="user-messages-backdrop" onClick={handleBackdropClick}>
+    <div className="user-messages-backdrop" role="button" tabIndex={-1} onClick={handleBackdropClick} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
       <div
         ref={sheetRef}
         className="user-messages-sheet"
@@ -215,7 +215,7 @@ function UserMessagesFABComponent({
   hasOlderMessages,
   loadingOlder,
   onLoadOlderMessages,
-  totalUserTurns,
+  totalUserTurns: _totalUserTurns,
 }: UserMessagesFABProps) {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);

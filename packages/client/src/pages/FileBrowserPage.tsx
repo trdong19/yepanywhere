@@ -117,18 +117,18 @@ export function FileBrowserPage() {
   return (
     <div className="fb-page">
       {/* Mobile backdrop */}
-      {sidebarOpen && <div className="fb-backdrop" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fb-backdrop" role="button" tabIndex={-1} onClick={() => setSidebarOpen(false)} onKeyDown={(e) => { if (e.key === "Escape") setSidebarOpen(false); }} />}
 
       <div className={`fb-sidebar ${sidebarOpen ? "fb-sidebar-open" : ""}`}>
         <div className="fb-sidebar-topbar">
           <span className="fb-sidebar-topbar-title">文件管理</span>
           <div className="fb-sidebar-topbar-actions">
-            <button className="fb-sidebar-topbar-btn" title="刷新" onClick={() => fileBrowserRef.current?.refresh()}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button type="button" className="fb-sidebar-topbar-btn" title="刷新" onClick={() => fileBrowserRef.current?.refresh()}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
             </button>
-            <button className="fb-sidebar-topbar-btn" title="关闭" onClick={() => setSidebarOpen(false)}>✕</button>
+            <button type="button" className="fb-sidebar-topbar-btn" title="关闭" onClick={() => setSidebarOpen(false)}>✕</button>
           </div>
         </div>
         <FileBrowser ref={fileBrowserRef} projectId={projectId} onFileSelect={handleFileSelect} />
@@ -138,6 +138,7 @@ export function FileBrowserPage() {
           <div className="fb-editor-container">
             <div className="fb-editor-header">
               <button
+                type="button"
                 className="fb-sidebar-toggle"
                 onClick={() => setSidebarOpen(true)}
                 title="打开文件树"
@@ -149,12 +150,14 @@ export function FileBrowserPage() {
                 {!isBinary && (
                   <>
                     <button
+                      type="button"
                       className={`fb-tab-btn ${viewMode === "preview" ? "active" : ""}`}
                       onClick={() => setViewMode("preview")}
                     >
                       预览
                     </button>
                     <button
+                      type="button"
                       className={`fb-tab-btn ${viewMode === "edit" ? "active" : ""}`}
                       onClick={() => setViewMode("edit")}
                     >
@@ -169,6 +172,7 @@ export function FileBrowserPage() {
                 )}
                 {viewMode === "edit" && (
                   <button
+                    type="button"
                     className="fb-save-btn"
                     onClick={() => handleSave(fileContent)}
                     disabled={!dirty || saving}
@@ -184,7 +188,7 @@ export function FileBrowserPage() {
                 <div className="fb-loading">加载中...</div>
               ) : isBinary ? (
                 <div className="fb-empty">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3" aria-hidden="true">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                   </svg>
@@ -206,6 +210,7 @@ export function FileBrowserPage() {
                   </div>
                   <div
                     className="fb-markdown"
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered sanitized HTML
                     dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
                   />
                 </div>
@@ -217,6 +222,7 @@ export function FileBrowserPage() {
                   </div>
                   <div
                     className="fb-highlighted"
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered sanitized HTML
                     dangerouslySetInnerHTML={{ __html: highlightedHtml }}
                   />
                 </div>
@@ -244,13 +250,14 @@ export function FileBrowserPage() {
         ) : (
           <div className="fb-empty">
             <button
+              type="button"
               className="fb-sidebar-toggle fb-sidebar-toggle-empty"
               onClick={() => setSidebarOpen(true)}
               title="打开文件树"
             >
               ☰ 打开文件管理
             </button>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3" aria-hidden="true">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
