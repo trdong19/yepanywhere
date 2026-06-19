@@ -191,8 +191,15 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
       if (e.button === 0) close();
     };
     document.addEventListener("click", handler);
+    const touchClose = (e: TouchEvent) => {
+      const target = e.target as Element;
+      if (target && !target.closest(".tree-context-menu")) close();
+    };
+    const timer = setTimeout(() => document.addEventListener("touchstart", touchClose), 0);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener("click", handler);
+      document.removeEventListener("touchstart", touchClose);
       if (closeCurrentMenu === close) closeCurrentMenu = null;
     };
   }, [contextMenu]);
@@ -506,8 +513,15 @@ const FileTree = forwardRef<FileTreeHandle, {
       if (e.button === 0) close();
     };
     document.addEventListener("click", handler);
+    const touchClose = (e: TouchEvent) => {
+      const target = e.target as Element;
+      if (target && !target.closest(".tree-context-menu")) close();
+    };
+    const timer = setTimeout(() => document.addEventListener("touchstart", touchClose), 0);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener("click", handler);
+      document.removeEventListener("touchstart", touchClose);
       if (closeCurrentMenu === close) closeCurrentMenu = null;
     };
   }, [rootMenu]);

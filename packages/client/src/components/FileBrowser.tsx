@@ -125,9 +125,19 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
 
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close);
+    // Delay touchstart listener to avoid closing on the same touch that opened the menu
+    const touchClose = (e: TouchEvent) => {
+      const target = e.target as Element;
+      if (target && !target.closest(".tree-context-menu")) close();
+    };
+    const timer = setTimeout(() => document.addEventListener("touchstart", touchClose), 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", close);
+      document.removeEventListener("touchstart", touchClose);
+    };
   }, [contextMenu]);
 
   useEffect(() => clearLongPress, [clearLongPress]);
