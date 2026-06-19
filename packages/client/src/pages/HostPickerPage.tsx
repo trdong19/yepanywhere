@@ -143,10 +143,9 @@ export function HostPickerPage() {
             navigate("/projects");
           } else {
             // No session - go to direct login pre-filled with saved host info
-            const params = new URLSearchParams();
-            params.set("url", host.wsUrl);
-            params.set("username", host.srpUsername);
-            navigate(`/login/direct?${params.toString()}`);
+            navigate("/login/direct", {
+              state: { url: host.wsUrl, username: host.srpUsername },
+            });
           }
         }
       } catch (err) {

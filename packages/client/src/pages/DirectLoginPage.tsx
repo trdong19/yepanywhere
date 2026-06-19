@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { YepAnywhereLogo } from "../components/YepAnywhereLogo";
 import { useRemoteConnection } from "../contexts/RemoteConnectionContext";
 import { useI18n } from "../i18n";
@@ -14,7 +14,10 @@ import { createDirectHost, loadSavedHosts, saveHost } from "../lib/hostStorage";
 
 export function DirectLoginPage() {
   const { t } = useI18n();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navState = location.state as
+    | { url?: string; username?: string }
+    | undefined;
   const {
     connect,
     isConnecting,
@@ -26,13 +29,13 @@ export function DirectLoginPage() {
     resumeSession,
   } = useRemoteConnection();
 
-  // Pre-fill from search params (when navigating from HostPickerPage) or stored credentials
+  // Pre-fill from navigation state (when switching hosts) or stored credentials
   const initialUrl =
-    searchParams.get("url") ?? storedUrl ?? "ws://localhost:3400/api/ws";
+    navState?.url ?? storedUrl ?? "ws://localhost:3400/api/ws";
   const initialUsername =
-    searchParams.get("username") ?? storedUsername ?? "";
+    navState?.username ?? storedUsername ?? "";
 
-  // Form state - pre-fill from stored credentials or search params
+  // Form state - pre-fill from stored credentials or navigation state
   // All hooks must be before any conditional returns
   const [serverUrl, setServerUrl] = useState(initialUrl);
   const [username, setUsername] = useState(initialUsername);
