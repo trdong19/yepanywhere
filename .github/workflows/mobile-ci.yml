@@ -56,6 +56,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --ignore-scripts
 
+      # --- Build shared package ---
+      - name: Build shared package
+        run: pnpm --filter shared build
+
       # --- Build Android APK ---
       - name: Build Android APK
         working-directory: packages/mobile
