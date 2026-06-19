@@ -311,6 +311,12 @@ export async function routeClientMessageSafely(
       case "ping":
         await handlers.onPing(msg);
         break;
+      case "client_capabilities":
+        // Client capabilities are normally handled in the encrypted binary path.
+        // For plaintext mode (local_unrestricted), they arrive here.
+        // Capabilities are already tracked in connState by the binary path,
+        // but in plaintext mode there's nothing to negotiate — just acknowledge.
+        break;
       case "device_stream_start":
       case "device_stream_stop":
       case "device_webrtc_answer":

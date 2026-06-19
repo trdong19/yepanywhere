@@ -279,6 +279,7 @@ export type {
   SrpClientMessage,
   SrpServerMessage,
   SrpMessage,
+  SrpNotRequired,
   // Session resumption types
   SrpSessionResumeInit,
   SrpSessionResumeChallenge,
@@ -294,6 +295,7 @@ export {
   isSrpServerChallenge,
   isSrpServerVerify,
   isSrpError,
+  isSrpNotRequired,
   // Session resumption type guards
   isSrpSessionResumeInit,
   isSrpSessionResumeChallenge,

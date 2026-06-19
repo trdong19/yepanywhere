@@ -69,6 +69,7 @@ import {
   handleSrpProof,
   handleSrpResume,
   handleSrpResumeInit,
+  sendSrpMessage,
 } from "./ws-srp-handlers.js";
 import {
   hasEstablishedSrpTransport,
@@ -1041,7 +1042,11 @@ export async function handleMessage(
     return;
   }
 
-  // Handle SRP messages first (always plaintext)
+  // Handle SRP messages (always plaintext during handshake).
+  // For local_unrestricted connections, authState is already "authenticated"
+  // but sessionKey is null — so hasEstablishedSrpTransport() returns false
+  // and the real SRP handlers will proceed normally.
+
   if (isSrpSessionResumeInit(parsed)) {
     await handleSrpResumeInit(ws, connState, parsed, remoteSessionService);
     return;

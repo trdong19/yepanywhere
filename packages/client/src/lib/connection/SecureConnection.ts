@@ -30,6 +30,7 @@ import {
   isRelayClientError,
   isSequencedEncryptedPayload,
   isSrpError,
+  isSrpNotRequired,
   isSrpServerChallenge,
   isSrpServerVerify,
   isSrpSessionInvalid,
@@ -140,6 +141,10 @@ export class SecureConnection implements Connection {
   // Flag indicating this connection was established via relay
   private isRelayConnection = false;
 
+  // When true, messages are sent/received as plaintext JSON (no NaCl encryption).
+  // Used when the server indicates SRP is not required (local trusted connections).
+  private plaintextMode = false;
+
   // Relay connection details for auto-reconnect (only set for relay connections)
   private relayUrl: string | null = null;
   private relayUsername: string | null = null;
@@ -176,6 +181,12 @@ export class SecureConnection implements Connection {
           const payload = encodeUploadChunkPayload(id, offset, chunk);
           if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             throw new Error("WebSocket not connected");
+          }
+          // Plaintext mode: send raw payload
+          if (this.plaintextMode) {
+            this.ws.send(payload);
+            await this.waitForUploadBackpressure();
+            return;
           }
           if (!this.sessionKey) {
             throw new Error("Not authenticated");
@@ -793,6 +804,7 @@ export class SecureConnection implements Connection {
     this.ws = null;
     this.sessionKey = null;
     this.srpSession = null;
+    this.plaintextMode = false;
     this.pendingResumeClientNonce = null;
     this.pendingResumeServerNonce = null;
     this.resetSequenceState();
@@ -1090,7 +1102,7 @@ export class SecureConnection implements Connection {
    */
   private async handleSrpChallenge(
     data: string,
-    _resolve: () => void,
+    resolve: () => void,
     reject: (err: Error) => void,
   ): Promise<void> {
     try {
@@ -1101,6 +1113,25 @@ export class SecureConnection implements Connection {
         this.connectionState = "failed";
         reject(new Error(`Authentication failed: ${msg.message}`));
         this.ws?.close();
+        return;
+      }
+
+      // Server says SRP is not required (trusted local connection).
+      // Switch to plaintext mode — no encryption needed.
+      if (isSrpNotRequired(msg)) {
+        console.log(
+          "[SecureConnection] SRP not required, using plaintext mode",
+        );
+        this.plaintextMode = true;
+        this.connectionState = "authenticated";
+        this.resetSequenceState();
+
+        if (this.ws) {
+          this.ws.onmessage = (event) => this.handleMessage(event.data);
+        }
+
+        this.sendCapabilities();
+        resolve();
         return;
       }
 
@@ -1274,6 +1305,19 @@ export class SecureConnection implements Connection {
    * Handle incoming WebSocket messages (after authentication).
    */
   private async handleMessage(data: unknown): Promise<void> {
+    // Plaintext mode: messages are plain JSON (no encryption)
+    if (this.plaintextMode) {
+      if (typeof data === "string") {
+        try {
+          const msg = JSON.parse(data) as YepMessage;
+          this.protocol.routeMessage(msg);
+        } catch {
+          console.warn("[SecureConnection] Failed to parse plaintext message");
+        }
+      }
+      return;
+    }
+
     if (!this.sessionKey) {
       console.warn("[SecureConnection] No session key for decryption");
       return;
@@ -1347,6 +1391,13 @@ export class SecureConnection implements Connection {
     if (!this.ws || this.ws.readyState !== websocketOpenState) {
       throw new Error("WebSocket not connected");
     }
+
+    // Plaintext mode: send plain JSON (no encryption)
+    if (this.plaintextMode) {
+      this.ws.send(JSON.stringify(msg));
+      return;
+    }
+
     if (!this.sessionKey) {
       throw new Error("Not authenticated");
     }
@@ -1482,6 +1533,7 @@ export class SecureConnection implements Connection {
 
     this.sessionKey = null;
     this.srpSession = null;
+    this.plaintextMode = false;
     this.connectionState = "disconnected";
 
     if (this.ws) {
@@ -1515,6 +1567,7 @@ export class SecureConnection implements Connection {
 
     // Reset connection state but keep session info for resumption
     this.connectionState = "disconnected";
+    this.plaintextMode = false;
     this.connectionPromise = null;
 
     await this.ensureConnected();
@@ -1527,7 +1580,10 @@ export class SecureConnection implements Connection {
    * Check if the connection is authenticated.
    */
   isAuthenticated(): boolean {
-    return this.connectionState === "authenticated" && this.sessionKey !== null;
+    return (
+      this.connectionState === "authenticated" &&
+      (this.sessionKey !== null || this.plaintextMode)
+    );
   }
 
   /**

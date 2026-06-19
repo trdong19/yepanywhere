@@ -9,6 +9,7 @@ export type {
   SrpClientMessage,
   SrpServerMessage,
   SrpMessage,
+  SrpNotRequired,
 } from "./srp-types.js";
 
 export {
@@ -17,6 +18,7 @@ export {
   isSrpServerChallenge,
   isSrpServerVerify,
   isSrpError,
+  isSrpNotRequired,
 } from "./srp-types.js";
 
 // Encryption types
