@@ -28,7 +28,6 @@ fn handle_deep_link(app: &tauri::AppHandle, url_str: &str) {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Handle deep links that launched the app
             if let Ok(Some(urls)) = app.deep_link().get_current() {

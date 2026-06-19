@@ -138,15 +138,6 @@ export interface SrpError {
   message: string;
 }
 
-/**
- * Server tells client that SRP authentication is not required.
- * Sent when the connection is already trusted (e.g., local network / Tailscale).
- * The client should proceed without SRP and use plaintext (unencrypted) messages.
- */
-export interface SrpNotRequired {
-  type: "srp_not_required";
-}
-
 /** All SRP messages from client to server */
 export type SrpClientMessage =
   | SrpClientHello
@@ -161,8 +152,7 @@ export type SrpServerMessage =
   | SrpError
   | SrpSessionResumeChallenge
   | SrpSessionResumed
-  | SrpSessionInvalid
-  | SrpNotRequired;
+  | SrpSessionInvalid;
 
 /** All SRP protocol messages */
 export type SrpMessage = SrpClientMessage | SrpServerMessage;
@@ -249,13 +239,5 @@ export function isSrpSessionInvalid(msg: unknown): msg is SrpSessionInvalid {
     typeof msg === "object" &&
     msg !== null &&
     (msg as SrpSessionInvalid).type === "srp_invalid"
-  );
-}
-
-export function isSrpNotRequired(msg: unknown): msg is SrpNotRequired {
-  return (
-    typeof msg === "object" &&
-    msg !== null &&
-    (msg as SrpNotRequired).type === "srp_not_required"
   );
 }

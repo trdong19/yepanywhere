@@ -117,42 +117,10 @@ describe("WebSocket Local Cookie Auth E2E", () => {
     });
   }
 
-  it("allows unauthenticated localhost websocket upgrade (auth handled by SRP)", async () => {
-    // The auth middleware skips /api/ws so the WebSocket handler can manage its
-    // own auth via SRP. For local_unrestricted connections without remote access
-    // credentials, the server responds with srp_not_required.
-    const ws = await connectWebSocket();
-
-    // Send srp_hello to trigger the server's auth decision.
-    // The server has remote access configured with username "local-auth-user",
-    // so we send a valid identity. Since the connection is local_unrestricted,
-    // the server responds with srp_not_required (no SRP needed for trusted local connections).
-    ws.send(
-      JSON.stringify({ type: "srp_hello", identity: "local-auth-user" }),
+  it("rejects unauthenticated localhost websocket upgrade", async () => {
+    await expect(connectWebSocket()).rejects.toThrow(
+      /Unexpected server response/,
     );
-
-    const msg = await new Promise<Record<string, unknown>>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error("Timed out waiting for SRP response")),
-        5000,
-      );
-      ws.on("message", (data) => {
-        try {
-          const parsed = JSON.parse(
-            typeof data === "string" ? data : data.toString(),
-          );
-          clearTimeout(timeout);
-          resolve(parsed);
-        } catch {
-          // ignore non-JSON
-        }
-      });
-    });
-    // Server should respond with srp_not_required (when no SRP credentials)
-    // or srp_challenge (when SRP credentials are configured). Either way,
-    // the WebSocket upgrade succeeded — previously it was rejected at HTTP level.
-    expect(["srp_not_required", "srp_challenge"]).toContain(msg.type);
-    ws.close();
   });
 
   it("allows cookie-authenticated localhost websocket without SRP handshake", async () => {

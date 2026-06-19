@@ -30,7 +30,6 @@ import {
   isRelayClientError,
   isSequencedEncryptedPayload,
   isSrpError,
-  isSrpNotRequired,
   isSrpServerChallenge,
   isSrpServerVerify,
   isSrpSessionInvalid,
@@ -141,10 +140,6 @@ export class SecureConnection implements Connection {
   // Flag indicating this connection was established via relay
   private isRelayConnection = false;
 
-  // When true, messages are sent/received as plaintext JSON (no NaCl encryption).
-  // Used when the server indicates SRP is not required (local trusted connections).
-  private plaintextMode = false;
-
   // Relay connection details for auto-reconnect (only set for relay connections)
   private relayUrl: string | null = null;
   private relayUsername: string | null = null;
@@ -181,12 +176,6 @@ export class SecureConnection implements Connection {
           const payload = encodeUploadChunkPayload(id, offset, chunk);
           if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             throw new Error("WebSocket not connected");
-          }
-          // Plaintext mode: send raw payload
-          if (this.plaintextMode) {
-            this.ws.send(payload);
-            await this.waitForUploadBackpressure();
-            return;
           }
           if (!this.sessionKey) {
             throw new Error("Not authenticated");
@@ -571,16 +560,15 @@ export class SecureConnection implements Connection {
   private async startFullSrpHandshake(
     _authRejectHandler: (err: Error) => void,
   ): Promise<void> {
-    // Allow empty password — for local connections the server responds with
-    // srp_not_required before the SRP math is needed. Use a placeholder so
-    // the SRP hello can be sent.
-    const password = this.password || "local";
+    if (!this.password) {
+      throw new Error("Password required for SRP authentication");
+    }
 
     this.pendingResumeClientNonce = null;
     this.pendingResumeServerNonce = null;
     console.log("[SecureConnection] Starting full SRP handshake");
     this.srpSession = new SrpClientSession();
-    await this.srpSession.generateHello(this.username, password);
+    await this.srpSession.generateHello(this.username, this.password);
 
     const browserProfileId = getOrCreateBrowserProfileId();
     const originMetadata: OriginMetadata = {
@@ -724,12 +712,14 @@ export class SecureConnection implements Connection {
       }
 
       if (isSrpSessionInvalid(msg)) {
-        // Allow fallback even without password — for local connections the
-        // server responds with srp_not_required so a real password isn't needed.
         if (!this.password) {
           console.log(
-            `[SecureConnection] Session resume failed: ${msg.reason} (no password, will try SRP with placeholder)`,
+            `[SecureConnection] Session resume failed: ${msg.reason} (no password for fallback)`,
           );
+          this.connectionState = "failed";
+          reject(new Error(`Session invalid: ${msg.reason}`));
+          this.ws?.close();
+          return;
         }
 
         console.log(
@@ -803,7 +793,6 @@ export class SecureConnection implements Connection {
     this.ws = null;
     this.sessionKey = null;
     this.srpSession = null;
-    this.plaintextMode = false;
     this.pendingResumeClientNonce = null;
     this.pendingResumeServerNonce = null;
     this.resetSequenceState();
@@ -891,9 +880,7 @@ export class SecureConnection implements Connection {
             return;
           }
 
-          // Allow fallback even without password — for local connections the
-          // server responds with srp_not_required so a real password isn't needed.
-          {
+          if (this.password) {
             console.log(
               "[SecureConnection] Session resume timed out, falling back to full SRP",
             );
@@ -935,8 +922,12 @@ export class SecureConnection implements Connection {
               return;
             }
 
-            // Allow fallback even without password — for local connections
-            // the server responds with srp_not_required.
+            if (!this.password) {
+              this.connectionState = "failed";
+              authRejectHandler(new Error(RESUME_INCOMPATIBLE_ERROR));
+              ws.close();
+              return;
+            }
 
             console.log(
               "[SecureConnection] Stored session uses an old resume protocol; starting full SRP",
@@ -1099,7 +1090,7 @@ export class SecureConnection implements Connection {
    */
   private async handleSrpChallenge(
     data: string,
-    resolve: () => void,
+    _resolve: () => void,
     reject: (err: Error) => void,
   ): Promise<void> {
     try {
@@ -1110,25 +1101,6 @@ export class SecureConnection implements Connection {
         this.connectionState = "failed";
         reject(new Error(`Authentication failed: ${msg.message}`));
         this.ws?.close();
-        return;
-      }
-
-      // Server says SRP is not required (trusted local connection).
-      // Switch to plaintext mode — no encryption needed.
-      if (isSrpNotRequired(msg)) {
-        console.log(
-          "[SecureConnection] SRP not required, using plaintext mode",
-        );
-        this.plaintextMode = true;
-        this.connectionState = "authenticated";
-        this.resetSequenceState();
-
-        if (this.ws) {
-          this.ws.onmessage = (event) => this.handleMessage(event.data);
-        }
-
-        this.sendCapabilities();
-        resolve();
         return;
       }
 
@@ -1302,19 +1274,6 @@ export class SecureConnection implements Connection {
    * Handle incoming WebSocket messages (after authentication).
    */
   private async handleMessage(data: unknown): Promise<void> {
-    // Plaintext mode: messages are plain JSON (no encryption)
-    if (this.plaintextMode) {
-      if (typeof data === "string") {
-        try {
-          const msg = JSON.parse(data) as YepMessage;
-          this.protocol.routeMessage(msg);
-        } catch {
-          console.warn("[SecureConnection] Failed to parse plaintext message");
-        }
-      }
-      return;
-    }
-
     if (!this.sessionKey) {
       console.warn("[SecureConnection] No session key for decryption");
       return;
@@ -1388,13 +1347,6 @@ export class SecureConnection implements Connection {
     if (!this.ws || this.ws.readyState !== websocketOpenState) {
       throw new Error("WebSocket not connected");
     }
-
-    // Plaintext mode: send plain JSON (no encryption)
-    if (this.plaintextMode) {
-      this.ws.send(JSON.stringify(msg));
-      return;
-    }
-
     if (!this.sessionKey) {
       throw new Error("Not authenticated");
     }
@@ -1530,7 +1482,6 @@ export class SecureConnection implements Connection {
 
     this.sessionKey = null;
     this.srpSession = null;
-    this.plaintextMode = false;
     this.connectionState = "disconnected";
 
     if (this.ws) {
@@ -1564,7 +1515,6 @@ export class SecureConnection implements Connection {
 
     // Reset connection state but keep session info for resumption
     this.connectionState = "disconnected";
-    this.plaintextMode = false;
     this.connectionPromise = null;
 
     await this.ensureConnected();
@@ -1577,10 +1527,7 @@ export class SecureConnection implements Connection {
    * Check if the connection is authenticated.
    */
   isAuthenticated(): boolean {
-    return (
-      this.connectionState === "authenticated" &&
-      (this.sessionKey !== null || this.plaintextMode)
-    );
+    return this.connectionState === "authenticated" && this.sessionKey !== null;
   }
 
   /**

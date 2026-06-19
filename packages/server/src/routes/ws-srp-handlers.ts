@@ -3,7 +3,6 @@ import type {
   SrpClientHello,
   SrpClientProof,
   SrpError,
-  SrpNotRequired,
   SrpServerChallenge,
   SrpServerVerify,
   SrpSessionInvalid,
@@ -26,7 +25,6 @@ import type { ConnectionState, WSAdapter } from "./ws-relay-handlers.js";
 import {
   hasEstablishedSrpTransport,
   isSrpProofPending,
-  isTrustedWithoutSrpTransport,
 } from "./ws-transport-auth.js";
 import { RESUME_PROTOCOL_VERSION } from "./version.js";
 
@@ -308,8 +306,7 @@ export function sendSrpMessage(
     | SrpError
     | SrpSessionResumeChallenge
     | SrpSessionResumed
-    | SrpSessionInvalid
-    | SrpNotRequired,
+    | SrpSessionInvalid,
 ): void {
   ws.send(JSON.stringify(msg));
 }
@@ -527,20 +524,6 @@ export async function handleSrpHello(
       message: "Already authenticated",
     });
     ws.close(4005, "Already authenticated");
-    return;
-  }
-
-  // If the connection is already trusted by policy (e.g., local network / Tailscale)
-  // but no SRP credentials are configured, tell the client to skip SRP.
-  if (
-    isTrustedWithoutSrpTransport(connState) &&
-    (!remoteAccessService || !remoteAccessService.getCredentials())
-  ) {
-    sendSrpMessage(ws, { type: "srp_not_required" });
-    connState.authState = "authenticated";
-    console.log(
-      `[WS Relay] SRP not required for ${msg.identity} (trusted local policy)`,
-    );
     return;
   }
 

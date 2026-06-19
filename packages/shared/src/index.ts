@@ -425,7 +425,6 @@ export type {
   SrpServerVerify,
   SrpError,
   SrpErrorCode,
-  SrpNotRequired,
   SrpClientMessage,
   SrpServerMessage,
   SrpMessage,
@@ -455,7 +454,6 @@ export {
   isSrpServerChallenge,
   isSrpServerVerify,
   isSrpError,
-  isSrpNotRequired,
   // Session resumption type guards
   isSrpSessionResumeInit,
   isSrpSessionResumeChallenge,

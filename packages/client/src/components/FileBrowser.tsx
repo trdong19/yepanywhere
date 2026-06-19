@@ -36,9 +36,6 @@ function FileIcon({ isDir }: { isDir: boolean }) {
   );
 }
 
-const LONG_PRESS_MS = 500;
-const MOVE_CANCEL_PX = 10;
-
 function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, onRename, onRefresh }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirEntry[]>([]);
@@ -50,9 +47,6 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const [createName, setCreateName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const isSelected = selectedPath === entry.path;
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const loadChildren = useCallback(async () => {
     if (!entry.isDir) return;
@@ -79,49 +73,6 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
-  }, []);
-
-  // Long-press support for mobile touch devices
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    if (!touch) return;
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-    longPressTriggeredRef.current = false;
-    longPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      setContextMenu({ x: touch.clientX, y: touch.clientY });
-    }, LONG_PRESS_MS);
-  }, []);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dx = Math.abs(touch.clientX - touchStartRef.current.x);
-    const dy = Math.abs(touch.clientY - touchStartRef.current.y);
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    touchStartRef.current = null;
-  }, []);
-
-  // Suppress the click event that fires after a long-press
-  const handleClickCapture = useCallback((e: React.MouseEvent) => {
-    if (longPressTriggeredRef.current) {
-      longPressTriggeredRef.current = false;
-      e.preventDefault();
-      e.stopPropagation();
-    }
   }, []);
 
   useEffect(() => {
@@ -179,12 +130,7 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
         className={`tree-row ${isSelected ? "selected" : ""}`}
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
         onClick={toggleExpand}
-        onClickCapture={handleClickCapture}
         onContextMenu={handleContextMenu}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
       >
         {entry.isDir && (
           <span className={`tree-chevron ${expanded ? "expanded" : ""}`}>

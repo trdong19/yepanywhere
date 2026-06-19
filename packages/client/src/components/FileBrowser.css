@@ -6,7 +6,7 @@
 .file-browser-actions button:hover { background: var(--bg-hover); color: var(--text-primary); }
 .file-browser-tree { flex: 1; overflow-y: auto; overflow-x: auto; padding: 4px 0; }
 .tree-node { position: relative; }
-.tree-row { display: flex; align-items: center; gap: 4px; padding: 2px 8px; cursor: pointer; white-space: nowrap; height: 24px; min-width: max-content; -webkit-touch-callout: none; touch-action: manipulation; }
+.tree-row { display: flex; align-items: center; gap: 4px; padding: 2px 8px; cursor: pointer; white-space: nowrap; height: 24px; min-width: max-content; }
 .tree-row:hover { background: var(--bg-hover, rgba(255,255,255,0.04)); }
 .tree-row.selected { background: var(--bg-active, rgba(99,102,241,0.15)); }
 .tree-row.tree-dragging { opacity: 0.4; }

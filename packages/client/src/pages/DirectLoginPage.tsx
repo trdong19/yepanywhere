@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { YepAnywhereLogo } from "../components/YepAnywhereLogo";
 import { useRemoteConnection } from "../contexts/RemoteConnectionContext";
 import { useI18n } from "../i18n";
@@ -14,10 +14,6 @@ import { createDirectHost, loadSavedHosts, saveHost } from "../lib/hostStorage";
 
 export function DirectLoginPage() {
   const { t } = useI18n();
-  const location = useLocation();
-  const navState = location.state as
-    | { url?: string; username?: string }
-    | undefined;
   const {
     connect,
     isConnecting,
@@ -29,16 +25,12 @@ export function DirectLoginPage() {
     resumeSession,
   } = useRemoteConnection();
 
-  // Pre-fill from navigation state (when switching hosts) or stored credentials
-  const initialUrl =
-    navState?.url ?? storedUrl ?? "ws://localhost:3400/api/ws";
-  const initialUsername =
-    navState?.username ?? storedUsername ?? "";
-
-  // Form state - pre-fill from stored credentials or navigation state
+  // Form state - pre-fill from stored credentials
   // All hooks must be before any conditional returns
-  const [serverUrl, setServerUrl] = useState(initialUrl);
-  const [username, setUsername] = useState(initialUsername);
+  const [serverUrl, setServerUrl] = useState(
+    storedUrl ?? "ws://localhost:3400/api/ws",
+  );
+  const [username, setUsername] = useState(storedUsername ?? "");
   const [password, setPassword] = useState("");
   // Always default to "remember me" - logout feature can be added later
   const [rememberMe, setRememberMe] = useState(true);

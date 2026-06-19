@@ -6,6 +6,10 @@ on:
     branches: [main]
     tags:
       - 'desktop-v*'
+    paths:
+      - 'packages/desktop/**'
+      - 'packages/shared/**'
+      - '.github/workflows/desktop-ci.yml'
   pull_request:
     branches: [main]
     paths:

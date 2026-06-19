@@ -75,9 +75,6 @@ function isAncestorOf(ancestor: string, path: string) {
 // Global: close any open context menu before opening a new one
 let closeCurrentMenu: (() => void) | null = null;
 
-const LONG_PRESS_MS = 500;
-const MOVE_CANCEL_PX = 10;
-
 function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, refreshKey, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onDragStart, onDragEnd, onDrop, onUpload, onRequestUpload, draggingPath, isLast, parentGuides, registerVisible }: TreeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirEntry[]>([]);
@@ -91,9 +88,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
   const inputRef = useRef<HTMLInputElement>(null);
   const isSelected = selectedPaths.has(entry.path);
   const isDragging = draggingPath === entry.path;
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Register this node in the visible order on every render
   registerVisible(entry.path);
@@ -216,53 +210,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     onDrop(entry.path);
   };
 
-  // Long-press support for mobile touch devices
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    if (!touch) return;
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-    longPressTriggeredRef.current = false;
-    longPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      if (!selectedPaths.has(entry.path)) {
-        onSelect(entry.path, entry.isDir, "single");
-      }
-      closeCurrentMenu?.();
-      setContextMenu({ x: touch.clientX, y: touch.clientY });
-    }, LONG_PRESS_MS);
-  }, [entry.path, entry.isDir, selectedPaths, onSelect]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dx = Math.abs(touch.clientX - touchStartRef.current.x);
-    const dy = Math.abs(touch.clientY - touchStartRef.current.y);
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    touchStartRef.current = null;
-  }, []);
-
-  // Suppress the click event that fires after a long-press
-  const handleClickCapture = useCallback((e: React.MouseEvent) => {
-    if (longPressTriggeredRef.current) {
-      longPressTriggeredRef.current = false;
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, []);
-
   // Context menu helpers
   const hasMulti = selectedPaths.size > 1 && selectedPaths.has(entry.path);
   const effectivePaths = hasMulti ? Array.from(selectedPaths) : [entry.path];
@@ -275,11 +222,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         className={`tree-row ${isSelected ? "selected" : ""} ${isDragging ? "tree-dragging" : ""} ${dragOver ? "tree-drag-over" : ""}`}
         style={{ paddingLeft: `${depth * 20 + 4}px` }}
         onClick={handleClick}
-        onClickCapture={handleClickCapture}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
         draggable={!renaming && !creating}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = "move";

@@ -123,14 +123,6 @@ export function createAuthMiddleware(
       return;
     }
 
-    // Skip auth for WebSocket upgrade endpoint (/api/ws).
-    // The WebSocket relay handler manages its own auth via SRP or cookie relay.
-    // Blocking the upgrade here prevents remote clients from connecting at all.
-    if (path === "/api/ws") {
-      await next();
-      return;
-    }
-
     // Check if account exists (shouldn't happen if enabled via enableAuth)
     if (!authService.hasAccount()) {
       c.header("X-Setup-Required", "true");
