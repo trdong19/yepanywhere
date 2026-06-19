@@ -571,15 +571,16 @@ export class SecureConnection implements Connection {
   private async startFullSrpHandshake(
     _authRejectHandler: (err: Error) => void,
   ): Promise<void> {
-    if (!this.password) {
-      throw new Error("Password required for SRP authentication");
-    }
+    // Allow empty password — for local connections the server responds with
+    // srp_not_required before the SRP math is needed. Use a placeholder so
+    // the SRP hello can be sent.
+    const password = this.password || "local";
 
     this.pendingResumeClientNonce = null;
     this.pendingResumeServerNonce = null;
     console.log("[SecureConnection] Starting full SRP handshake");
     this.srpSession = new SrpClientSession();
-    await this.srpSession.generateHello(this.username, this.password);
+    await this.srpSession.generateHello(this.username, password);
 
     const browserProfileId = getOrCreateBrowserProfileId();
     const originMetadata: OriginMetadata = {
@@ -723,14 +724,12 @@ export class SecureConnection implements Connection {
       }
 
       if (isSrpSessionInvalid(msg)) {
+        // Allow fallback even without password — for local connections the
+        // server responds with srp_not_required so a real password isn't needed.
         if (!this.password) {
           console.log(
-            `[SecureConnection] Session resume failed: ${msg.reason} (no password for fallback)`,
+            `[SecureConnection] Session resume failed: ${msg.reason} (no password, will try SRP with placeholder)`,
           );
-          this.connectionState = "failed";
-          reject(new Error(`Session invalid: ${msg.reason}`));
-          this.ws?.close();
-          return;
         }
 
         console.log(
@@ -892,7 +891,9 @@ export class SecureConnection implements Connection {
             return;
           }
 
-          if (this.password) {
+          // Allow fallback even without password — for local connections the
+          // server responds with srp_not_required so a real password isn't needed.
+          {
             console.log(
               "[SecureConnection] Session resume timed out, falling back to full SRP",
             );
@@ -934,12 +935,8 @@ export class SecureConnection implements Connection {
               return;
             }
 
-            if (!this.password) {
-              this.connectionState = "failed";
-              authRejectHandler(new Error(RESUME_INCOMPATIBLE_ERROR));
-              ws.close();
-              return;
-            }
+            // Allow fallback even without password — for local connections
+            // the server responds with srp_not_required.
 
             console.log(
               "[SecureConnection] Stored session uses an old resume protocol; starting full SRP",
