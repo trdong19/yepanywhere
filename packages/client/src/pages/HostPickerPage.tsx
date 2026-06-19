@@ -142,10 +142,11 @@ export function HostPickerPage() {
             // Success - navigate to projects (direct mode doesn't use username URLs)
             navigate("/projects");
           } else {
-            // No session - go to direct login pre-filled with saved host info
-            navigate("/login/direct", {
-              state: { url: host.wsUrl, username: host.srpUsername },
-            });
+            // No session — try connecting directly.
+            // For local connections the server responds with srp_not_required
+            // so no real credentials are needed.
+            await connect(host.wsUrl, host.srpUsername || "local", "", true);
+            navigate("/projects");
           }
         }
       } catch (err) {
@@ -165,7 +166,9 @@ export function HostPickerPage() {
           if (host.mode === "relay" && host.relayUsername) {
             navigate(relayLoginPath(host));
           } else {
-            navigate("/login/direct");
+            navigate("/login/direct", {
+              state: { url: host.wsUrl, username: host.srpUsername },
+            });
           }
         } else {
           setError(message);
