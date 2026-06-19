@@ -1,4 +1,4 @@
-import { createReadStream, type Stats } from "node:fs";
+import type { Stats } from "node:fs";
 import {
   cp,
   mkdir,
@@ -17,11 +17,9 @@ import {
   extname,
   isAbsolute,
   join,
-  normalize,
   relative,
   resolve,
 } from "node:path";
-import { createInterface } from "node:readline";
 import { Hono } from "hono";
 import { highlightFile } from "../highlighting/index.js";
 import { renderMarkdownToHtml } from "../augments/markdown-augments.js";
@@ -298,6 +296,45 @@ export function createServerAdminRoutes(deps: ServerAdminDeps): Hono {
   });
 
   /**
+   * POST /files/upload
+   * Uploads a file to a directory via multipart form data.
+   * Fields: file (File), dir (string - destination directory path)
+   */
+  routes.post("/files/upload", async (c) => {
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    const dirPath = body["dir"];
+
+    if (!file || !(file instanceof File)) return c.json({ error: "Missing file" }, 400);
+    if (typeof dirPath !== "string" || !dirPath) return c.json({ error: "Missing dir" }, 400);
+
+    const resolvedDir = await resolveSafePath(dirPath);
+    if (!resolvedDir) return c.json({ error: "Invalid dir" }, 400);
+
+    let dirStats: Stats;
+    try { dirStats = await stat(resolvedDir); } catch {
+      return c.json({ error: "Directory not found" }, 404);
+    }
+    if (!dirStats.isDirectory()) return c.json({ error: "Not a directory" }, 400);
+
+    const fileName = file.name;
+    if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
+      return c.json({ error: "Invalid file name" }, 400);
+    }
+
+    const destPath = resolve(resolvedDir, fileName);
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    try {
+      await writeFile(destPath, buffer);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to upload";
+      return c.json({ error: msg }, 500);
+    }
+    return c.json({ ok: true, path: destPath, name: fileName, size: buffer.length });
+  });
+
+  /**
    * GET /files/raw?path=...
    * Streams a binary file with the correct Content-Type (for image preview etc.)
    */
@@ -387,6 +424,80 @@ export function createServerAdminRoutes(deps: ServerAdminDeps): Hono {
       return c.json({ error: msg }, 500);
     }
     return c.json({ ok: true, path: destPath });
+  });
+
+  /**
+   * POST /files/batch-delete
+   * Deletes multiple files/directories. Body: { paths: string[] }
+   */
+  routes.post("/files/batch-delete", async (c) => {
+    let body: { paths: string[] };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!Array.isArray(body.paths) || body.paths.length === 0) return c.json({ error: "Missing paths" }, 400);
+
+    const errors: string[] = [];
+    for (const p of body.paths) {
+      const resolved = await resolveSafePath(p);
+      if (!resolved) { errors.push(`${p}: invalid path`); continue; }
+      if (resolve(resolved) === "/") { errors.push(`${p}: cannot delete root`); continue; }
+      try { await rm(resolved, { recursive: true }); }
+      catch (err: unknown) { errors.push(`${p}: ${err instanceof Error ? err.message : "failed"}`); }
+    }
+    return c.json({ ok: errors.length === 0, errors });
+  });
+
+  /**
+   * POST /files/batch-copy
+   * Copies multiple files/dirs to a destination directory. Body: { sources: string[], destDir: string }
+   */
+  routes.post("/files/batch-copy", async (c) => {
+    let body: { sources: string[]; destDir: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!Array.isArray(body.sources) || !body.destDir) return c.json({ error: "Missing sources or destDir" }, 400);
+
+    const destDir = await resolveSafePath(body.destDir);
+    if (!destDir) return c.json({ error: "Invalid destDir" }, 400);
+
+    const errors: string[] = [];
+    for (const src of body.sources) {
+      const srcPath = await resolveSafePath(src);
+      if (!srcPath) { errors.push(`${src}: invalid path`); continue; }
+      const name = basename(srcPath);
+      const destPath = resolve(destDir, name);
+      if (srcPath === destPath || isPathInsideDirectory(destPath, srcPath)) {
+        errors.push(`${src}: cannot copy into itself`); continue;
+      }
+      try {
+        const s = await stat(srcPath);
+        await cp(srcPath, destPath, s.isDirectory() ? { recursive: true } : undefined);
+      } catch (err: unknown) { errors.push(`${src}: ${err instanceof Error ? err.message : "failed"}`); }
+    }
+    return c.json({ ok: errors.length === 0, errors });
+  });
+
+  /**
+   * POST /files/batch-move
+   * Moves multiple files/dirs to a destination directory. Body: { sources: string[], destDir: string }
+   */
+  routes.post("/files/batch-move", async (c) => {
+    let body: { sources: string[]; destDir: string };
+    try { body = await c.req.json(); } catch { return c.json({ error: "Invalid JSON" }, 400); }
+    if (!Array.isArray(body.sources) || !body.destDir) return c.json({ error: "Missing sources or destDir" }, 400);
+
+    const destDir = await resolveSafePath(body.destDir);
+    if (!destDir) return c.json({ error: "Invalid destDir" }, 400);
+
+    const errors: string[] = [];
+    for (const src of body.sources) {
+      const srcPath = await resolveSafePath(src);
+      if (!srcPath) { errors.push(`${src}: invalid path`); continue; }
+      const name = basename(srcPath);
+      const destPath = resolve(destDir, name);
+      if (srcPath === destPath) { errors.push(`${src}: same destination`); continue; }
+      try { await rename(srcPath, destPath); }
+      catch (err: unknown) { errors.push(`${src}: ${err instanceof Error ? err.message : "failed"}`); }
+    }
+    return c.json({ ok: errors.length === 0, errors });
   });
 
   return routes;

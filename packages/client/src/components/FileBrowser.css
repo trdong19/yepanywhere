@@ -26,6 +26,8 @@
 .tree-context-menu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
 .tree-context-menu button:hover { background: var(--bg-hover, rgba(255,255,255,0.08)); }
 .tree-context-menu button.danger { color: #ef4444; }
+.ctx-download { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; }
+.ctx-download:hover { background: var(--bg-hover, rgba(255,255,255,0.08)); }
 .ctx-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
 
 /* Tree indent guides */

@@ -3267,6 +3267,30 @@ a.sidebar-nav-item {
   position: relative;
 }
 
+.message-input-wrapper.drag-over {
+  outline: 2px dashed var(--color-primary, #6366f1);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  opacity: 0.95;
+  border-radius: var(--radius-lg);
+  color: var(--color-primary, #6366f1);
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
 .message-input-toggle {
   position: absolute;
   top: -12px;

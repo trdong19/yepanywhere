@@ -830,6 +830,47 @@ export function MessageInput({
     [],
   );
 
+  // Drag-and-drop file upload
+  const [dragOver, setDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!canAttach || !onAttach) return;
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, [canAttach, onAttach]);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!canAttach || !onAttach) return;
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      dragCounterRef.current += 1;
+      setDragOver(true);
+    }
+  }, [canAttach, onAttach]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!canAttach || !onAttach) return;
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setDragOver(false);
+    }
+  }, [canAttach, onAttach]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!canAttach || !onAttach) return;
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      onAttach(files);
+    }
+  }, [canAttach, onAttach]);
+
   // Handle slash command selection - insert command into text
   const handleSlashCommand = useCallback(
     (command: string) => {
@@ -858,9 +899,23 @@ export function MessageInput({
 
   return (
     <div
-      className="message-input-wrapper"
+      className={`message-input-wrapper ${dragOver ? "drag-over" : ""}`}
       onKeyDownCapture={handleComposerKeyDown}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
+      {dragOver && (
+        <div className="drop-overlay">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <span>拖放文件到此处上传</span>
+        </div>
+      )}
       {/* Floating toggle button - only show when user can control collapse (not externally collapsed) */}
       {!externalCollapsed && (
         <button
