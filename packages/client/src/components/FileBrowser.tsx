@@ -5,6 +5,9 @@ import "./FileBrowser.css";
 const LONG_PRESS_MS = 500;
 const MOVE_CANCEL_PX = 10;
 
+// Global ref: the close function of the currently open context menu (if any)
+let activeMenuCloseFn: (() => void) | null = null;
+
 interface DirEntry {
   name: string;
   isDir: boolean;
@@ -65,6 +68,11 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
+    // Close any previously open menu first
+    if (activeMenuCloseFn) {
+      activeMenuCloseFn();
+      activeMenuCloseFn = null;
+    }
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
@@ -125,18 +133,16 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
 
   useEffect(() => {
     if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    document.addEventListener("click", close);
-    // Delay touchstart listener to avoid closing on the same touch that opened the menu
-    const touchClose = (e: TouchEvent) => {
-      const target = e.target as Element;
-      if (target && !target.closest(".tree-context-menu")) close();
+    const close = () => {
+      setContextMenu(null);
+      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
     };
-    const timer = setTimeout(() => document.addEventListener("touchstart", touchClose), 0);
+    activeMenuCloseFn = close;
+    // Desktop: close on outside click
+    document.addEventListener("click", close);
     return () => {
-      clearTimeout(timer);
       document.removeEventListener("click", close);
-      document.removeEventListener("touchstart", touchClose);
+      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
     };
   }, [contextMenu]);
 

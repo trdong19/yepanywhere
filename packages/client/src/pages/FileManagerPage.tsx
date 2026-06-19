@@ -76,7 +76,7 @@ function isAncestorOf(ancestor: string, path: string) {
 }
 
 // Global: close any open context menu before opening a new one
-let closeCurrentMenu: (() => void) | null = null;
+let activeMenuCloseFn: (() => void) | null = null;
 
 function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, refreshKey, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onDragStart, onDragEnd, onDrop, onUpload, onRequestUpload, draggingPath, isLast, parentGuides, registerVisible }: TreeProps) {
   const [expanded, setExpanded] = useState(false);
@@ -109,6 +109,11 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
+    // Close any previously open menu immediately
+    if (activeMenuCloseFn) {
+      activeMenuCloseFn();
+      activeMenuCloseFn = null;
+    }
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
@@ -117,7 +122,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
       if (!selectedPaths.has(entry.path)) {
         onSelect(entry.path, entry.isDir, "single");
       }
-      closeCurrentMenu?.();
       setContextMenu({ x: touch.clientX, y: touch.clientY });
     }, LONG_PRESS_MS);
   }, [entry.path, entry.isDir, onSelect, selectedPaths]);
@@ -181,26 +185,19 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
 
   useEffect(() => clearLongPress, [clearLongPress]);
 
-  // Close menu on click anywhere, or when another menu opens
+  // Register close function for cross-component menu management
   useEffect(() => {
     if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    closeCurrentMenu?.();
-    closeCurrentMenu = close;
-    const handler = (e: MouseEvent) => {
-      if (e.button === 0) close();
+    const close = () => {
+      setContextMenu(null);
+      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
     };
-    document.addEventListener("click", handler);
-    const touchClose = (e: TouchEvent) => {
-      const target = e.target as Element;
-      if (target && !target.closest(".tree-context-menu")) close();
-    };
-    const timer = setTimeout(() => document.addEventListener("touchstart", touchClose), 0);
+    activeMenuCloseFn = close;
+    // Desktop: close on outside click
+    document.addEventListener("click", close);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", handler);
-      document.removeEventListener("touchstart", touchClose);
-      if (closeCurrentMenu === close) closeCurrentMenu = null;
+      document.removeEventListener("click", close);
+      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
     };
   }, [contextMenu]);
 
@@ -305,7 +302,10 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
           if (!selectedPaths.has(entry.path)) {
             onSelect(entry.path, entry.isDir, "single");
           }
-          closeCurrentMenu?.();
+          if (activeMenuCloseFn) {
+            activeMenuCloseFn();
+            activeMenuCloseFn = null;
+          }
           setContextMenu({ x: e.clientX, y: e.clientY });
         }}
         onTouchStart={handleTouchStart}
@@ -506,23 +506,15 @@ const FileTree = forwardRef<FileTreeHandle, {
 
   useEffect(() => {
     if (!rootMenu) return;
-    const close = () => setRootMenu(null);
-    closeCurrentMenu?.();
-    closeCurrentMenu = close;
-    const handler = (e: MouseEvent) => {
-      if (e.button === 0) close();
+    const close = () => {
+      setRootMenu(null);
+      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
     };
-    document.addEventListener("click", handler);
-    const touchClose = (e: TouchEvent) => {
-      const target = e.target as Element;
-      if (target && !target.closest(".tree-context-menu")) close();
-    };
-    const timer = setTimeout(() => document.addEventListener("touchstart", touchClose), 0);
+    activeMenuCloseFn = close;
+    document.addEventListener("click", close);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", handler);
-      document.removeEventListener("touchstart", touchClose);
-      if (closeCurrentMenu === close) closeCurrentMenu = null;
+      document.removeEventListener("click", close);
+      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
     };
   }, [rootMenu]);
 
@@ -569,7 +561,10 @@ const FileTree = forwardRef<FileTreeHandle, {
       onContextMenu={(e) => {
         if (e.target === e.currentTarget) {
           e.preventDefault();
-          closeCurrentMenu?.();
+          if (activeMenuCloseFn) {
+            activeMenuCloseFn();
+            activeMenuCloseFn = null;
+          }
           setRootMenu({ x: e.clientX, y: e.clientY });
         }
       }}
