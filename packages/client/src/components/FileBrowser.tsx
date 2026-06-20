@@ -308,14 +308,14 @@ export const FileBrowser = forwardRef<FileBrowserHandle, FileBrowserProps>(
   }, []);
 
   // Close menu on outside click (desktop)
+  const closeMenuRef = useRef(closeMenu);
+  closeMenuRef.current = closeMenu;
   useEffect(() => {
     if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    document.addEventListener("click", close);
-    return () => {
-      document.removeEventListener("click", close);
-    };
-  }, [contextMenu]);
+    const handler = () => closeMenuRef.current();
+    const id = setTimeout(() => document.addEventListener("click", handler, { capture: true }), 50);
+    return () => { clearTimeout(id); document.removeEventListener("click", handler, { capture: true }); };
+  }, [contextMenu?.path, contextMenu?.x]);
 
   const handleMenuCreate = async (kind: "file" | "dir") => {
     if (!contextMenu || !createName) return;
