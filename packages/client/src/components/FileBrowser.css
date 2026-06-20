@@ -21,14 +21,14 @@
 .tree-name-ext { flex-shrink: 0; color: var(--text-tertiary); }
 .tree-size { font-size: 11px; color: var(--text-tertiary); margin-left: auto; padding-left: 8px; }
 .tree-loading { color: var(--text-secondary); font-style: italic; font-size: 12px; }
-.tree-inline-input { flex: 1; background: var(--bg-input); border: 1px solid var(--color-primary, #6366f1); border-radius: 3px; color: var(--text-primary); font-size: 13px; padding: 1px 4px; outline: none; min-width: 0; }
-.tree-context-menu { position: fixed; background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 4px; min-width: 140px; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
-.tree-context-menu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.tree-inline-input { flex: 1; background: var(--bg-input); border: 1px solid var(--color-primary, #6366f1); border-radius: 3px; color: var(--text-primary); font-size: 13px; padding: 1px 4px; outline: none; min-width: 0; pointer-events: auto; }
+.tree-context-menu { position: fixed; background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 4px; min-width: 140px; z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.3); pointer-events: none; }
+.tree-context-menu button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; pointer-events: auto; }
 .tree-context-menu button:hover { background: var(--bg-hover, rgba(255,255,255,0.08)); }
 .tree-context-menu button.danger { color: #ef4444; }
-.ctx-download { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; }
+.ctx-download { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text-primary); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; pointer-events: auto; }
 .ctx-download:hover { background: var(--bg-hover, rgba(255,255,255,0.08)); }
-.ctx-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+.ctx-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; pointer-events: none; }
 
 /* Tree indent guides */
 .tree-guides {

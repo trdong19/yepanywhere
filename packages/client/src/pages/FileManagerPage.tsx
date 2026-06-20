@@ -566,7 +566,7 @@ const FileTree = forwardRef<FileTreeHandle, {
       {contextMenu && (
         <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
           {inlineAction ? (
-            <div style={{ padding: "4px 8px" }}>
+            <div style={{ padding: "4px 8px", pointerEvents: "auto" }}>
               <input ref={inlineInputRef} className="tree-inline-input" style={{ width: "100%" }}
                 placeholder={inlineAction.type === "rename" ? "重命名..." : inlineAction.type === "create-dir" ? "新建文件夹..." : "新建文件..."}
                 value={inlineValue} onChange={(e) => setInlineValue(e.target.value)}
