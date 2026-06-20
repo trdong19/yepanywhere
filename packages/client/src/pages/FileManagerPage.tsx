@@ -107,9 +107,11 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
+    console.log("[MenuDebug] touchstart", entry.path);
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
+      console.log("[MenuDebug] long-press timer fired", entry.path);
       longPressTriggeredRef.current = true;
       if (!selectedPaths.has(entry.path)) {
         onSelect(entry.path, entry.isDir, "single");
@@ -125,13 +127,17 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     const dx = touch.clientX - touchStartRef.current.x;
     const dy = touch.clientY - touchStartRef.current.y;
     if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+      console.log("[MenuDebug] touchmove cancelled long-press", entry.path);
       clearLongPress();
     }
-  }, [clearLongPress]);
+  }, [clearLongPress, entry.path]);
 
   const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      console.log("[MenuDebug] touchend (timer still active, cancelling)", entry.path);
+    }
     clearLongPress();
-  }, [clearLongPress]);
+  }, [clearLongPress, entry.path]);
 
   const handleClickCapture = useCallback((e: React.MouseEvent) => {
     if (longPressTriggeredRef.current) {
@@ -430,6 +436,7 @@ const FileTree = forwardRef<FileTreeHandle, {
   const closeMenu = useCallback(() => setContextMenu(null), []);
 
   const openMenu = useCallback((x: number, y: number, path: string, isDir: boolean) => {
+    console.log("[MenuDebug] openMenu called", { x, y, path, isDir });
     setContextMenu({ x, y, path, isDir });
     setInlineAction(null);
   }, []);
@@ -437,14 +444,18 @@ const FileTree = forwardRef<FileTreeHandle, {
   // Close menu on outside click (desktop)
   useEffect(() => {
     if (!contextMenu) return;
+    console.log("[MenuDebug] listener added", contextMenu.path, contextMenu.x, contextMenu.y);
     const handler = (e: MouseEvent) => {
-      // Don't close if click is inside the menu
       const target = e.target as Element;
       if (target?.closest(".tree-context-menu")) return;
+      console.log("[MenuDebug] closing menu via click", target?.tagName, target?.className?.slice(0, 30));
       setContextMenu(null);
     };
     document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    return () => {
+      console.log("[MenuDebug] listener removed", contextMenu.path);
+      document.removeEventListener("click", handler);
+    };
   }, [contextMenu]);
 
   useEffect(() => {
