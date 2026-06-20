@@ -130,6 +130,8 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    // Skip if long-press timer already opened the menu (mobile)
+    if (longPressTriggeredRef.current) return;
     onOpenMenu(e.clientX, e.clientY, entry.path, entry.isDir);
   }, [onOpenMenu, entry.path, entry.isDir]);
 

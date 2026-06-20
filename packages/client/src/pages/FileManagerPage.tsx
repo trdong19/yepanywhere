@@ -276,6 +276,8 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          // Skip if long-press timer already opened the menu (mobile)
+          if (longPressTriggeredRef.current) return;
           if (!selectedPaths.has(entry.path)) {
             onSelect(entry.path, entry.isDir, "single");
           }
