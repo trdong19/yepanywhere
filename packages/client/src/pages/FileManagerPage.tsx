@@ -40,6 +40,8 @@ interface TreeProps {
   isLast: boolean;
   parentGuides: boolean[];
   registerVisible: (path: string) => void;
+  onOpenMenu: (x: number, y: number, path: string, isDir: boolean) => void;
+  menuTargetPath: string | null;
 }
 
 function FileIcon({ isDir }: { isDir: boolean }) {
@@ -75,14 +77,10 @@ function isAncestorOf(ancestor: string, path: string) {
   return path === ancestor || path.startsWith(a);
 }
 
-// Global mutable ref: always points to the latest menu close function
-const activeMenuRef: { current: (() => void) | null } = { current: null };
-
-function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, refreshKey, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onDragStart, onDragEnd, onDrop, onUpload, onRequestUpload, draggingPath, isLast, parentGuides, registerVisible }: TreeProps) {
+function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, refreshKey, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onDragStart, onDragEnd, onDrop, onUpload, onRequestUpload, draggingPath, isLast, parentGuides, registerVisible, onOpenMenu, menuTargetPath }: TreeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(entry.name);
   const [creating, setCreating] = useState<"file" | "dir" | null>(null);
@@ -109,22 +107,16 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
-    // Close any previously open menu immediately
-    if (activeMenuRef.current) {
-      activeMenuRef.current();
-      activeMenuRef.current = null;
-    }
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true;
-      // Select the item on long-press
       if (!selectedPaths.has(entry.path)) {
         onSelect(entry.path, entry.isDir, "single");
       }
-      setContextMenu({ x: touch.clientX, y: touch.clientY });
+      onOpenMenu(touch.clientX, touch.clientY, entry.path, entry.isDir);
     }, LONG_PRESS_MS);
-  }, [entry.path, entry.isDir, onSelect, selectedPaths]);
+  }, [entry.path, entry.isDir, onSelect, selectedPaths, onOpenMenu]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
@@ -184,22 +176,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
   }, [entry.isDir, entry.path, onSelect, renaming, creating, toggleExpand]);
 
   useEffect(() => clearLongPress, [clearLongPress]);
-
-  // Register close function for cross-component menu management
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => {
-      setContextMenu(null);
-      if (activeMenuRef.current === close) activeMenuRef.current = null;
-    };
-    activeMenuRef.current = close;
-    // Desktop: close on outside click
-    document.addEventListener("click", close);
-    return () => {
-      document.removeEventListener("click", close);
-      if (activeMenuRef.current === close) activeMenuRef.current = null;
-    };
-  }, [contextMenu]);
 
   useEffect(() => {
     if ((renaming || creating) && inputRef.current) {
@@ -269,10 +245,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     onDrop(entry.path);
   };
 
-  // Context menu helpers
-  const hasMulti = selectedPaths.size > 1 && selectedPaths.has(entry.path);
-  const effectivePaths = hasMulti ? Array.from(selectedPaths) : [entry.path];
-
   const guides = [...parentGuides, !isLast];
 
   return (
@@ -298,15 +270,10 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          // If right-clicked item not in selection, select only it
           if (!selectedPaths.has(entry.path)) {
             onSelect(entry.path, entry.isDir, "single");
           }
-          if (activeMenuRef.current) {
-            activeMenuRef.current();
-            activeMenuRef.current = null;
-          }
-          setContextMenu({ x: e.clientX, y: e.clientY });
+          onOpenMenu(e.clientX, e.clientY, entry.path, entry.isDir);
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -379,58 +346,13 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
                 onUpload={onUpload} onRequestUpload={onRequestUpload}
                 draggingPath={draggingPath}
                 isLast={idx === children.length - 1} parentGuides={guides}
-                registerVisible={registerVisible} />
+                registerVisible={registerVisible}
+                onOpenMenu={onOpenMenu} menuTargetPath={menuTargetPath} />
             ))
           )}
         </div>
       )}
 
-      {contextMenu && (
-        <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
-          {entry.isDir && (
-            <>
-              <button type="button" onClick={() => { setCreating("file"); setContextMenu(null); }}>新建文件</button>
-              <button type="button" onClick={() => { setCreating("dir"); setContextMenu(null); }}>新建文件夹</button>
-              <button type="button" onClick={() => { onRequestUpload(entry.path); setContextMenu(null); }}>上传到此目录</button>
-              <div className="ctx-divider" />
-            </>
-          )}
-          <button type="button" onClick={async () => {
-            const dirPath = entry.isDir ? entry.path : entry.path.substring(0, entry.path.lastIndexOf("/")) || "/";
-            setContextMenu(null);
-            try {
-              const result = await api.addProject(dirPath);
-              window.location.href = `/new-session?projectId=${encodeURIComponent(result.project.id)}`;
-            } catch (err) {
-              console.error("Failed to create session:", err);
-            }
-          }}>在此目录新建会话</button>
-          <button type="button" onClick={() => { onCopy(effectivePaths); setContextMenu(null); }}>
-            复制{hasMulti ? ` (${effectivePaths.length})` : ""}
-          </button>
-          <button type="button" onClick={() => { onCut(effectivePaths); setContextMenu(null); }}>
-            剪切{hasMulti ? ` (${effectivePaths.length})` : ""}
-          </button>
-          {clipboardPaths.length > 0 && entry.isDir && (
-            <button type="button" onClick={() => { onPaste(entry.path); setContextMenu(null); }}>
-              粘贴 {clipboardMode === "cut" ? "✂" : "📋"} ({clipboardPaths.length})
-            </button>
-          )}
-          <div className="ctx-divider" />
-          <button type="button" onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
-          <button type="button" onClick={() => {
-            navigator.clipboard.writeText(effectivePaths.join("\n"));
-            setContextMenu(null);
-          }}>复制路径</button>
-          <button type="button" onClick={() => { onDownload(effectivePaths); setContextMenu(null); }}>
-            下载{hasMulti ? ` (${effectivePaths.length})` : ""}
-          </button>
-          <div className="ctx-divider" />
-          <button type="button" className="danger" onClick={() => { onDelete(effectivePaths); setContextMenu(null); }}>
-            删除{hasMulti ? ` (${effectivePaths.length})` : ""}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -451,15 +373,18 @@ const FileTree = forwardRef<FileTreeHandle, {
   onUpload: (files: FileList, destDir: string) => void;
   onRequestUpload: (destDir: string) => void;
   anchorPath: string | null;
-}>(function FileTree({ selectedPaths, onSelect, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onUpload, onRequestUpload, anchorPath }, ref) {
+}>(
+  function FileTree({ selectedPaths, onSelect, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onUpload, onRequestUpload, anchorPath }, ref) {
   const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [rootMenu, setRootMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string; isDir: boolean } | null>(null);
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
+  const [inlineAction, setInlineAction] = useState<{ type: "rename" | "create-file" | "create-dir"; path: string } | null>(null);
+  const [inlineValue, setInlineValue] = useState("");
+  const inlineInputRef = useRef<HTMLInputElement>(null);
 
   // Visible order tracking for range selection.
-  // Cleared at the top of each render; TreeNode calls registerVisible during render.
   const visibleOrderRef = useRef<string[]>([]);
   visibleOrderRef.current = [];
 
@@ -467,10 +392,8 @@ const FileTree = forwardRef<FileTreeHandle, {
     visibleOrderRef.current.push(path);
   }, []);
 
-  // Wrap onSelect to handle range selection
   const handleSelect = useCallback((path: string, isDir: boolean, mode: "single" | "toggle" | "range") => {
     if (mode === "range" && anchorPath) {
-      // visibleOrderRef was populated during the last render cycle
       const order = visibleOrderRef.current;
       const anchorIdx = order.indexOf(anchorPath);
       const targetIdx = order.indexOf(path);
@@ -504,19 +427,47 @@ const FileTree = forwardRef<FileTreeHandle, {
   useImperativeHandle(ref, () => ({ refresh: handleRefresh }), [handleRefresh]);
   useEffect(() => { loadRoot(); }, [loadRoot]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const closeMenu = useCallback(() => setContextMenu(null), []);
+
+  const openMenu = useCallback((x: number, y: number, path: string, isDir: boolean) => {
+    setContextMenu({ x, y, path, isDir });
+    setInlineAction(null);
+  }, []);
+
+  // Close menu on outside click (desktop)
   useEffect(() => {
-    if (!rootMenu) return;
-    const close = () => {
-      setRootMenu(null);
-      if (activeMenuRef.current === close) activeMenuRef.current = null;
-    };
-    activeMenuRef.current = close;
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
     document.addEventListener("click", close);
-    return () => {
-      document.removeEventListener("click", close);
-      if (activeMenuRef.current === close) activeMenuRef.current = null;
-    };
-  }, [rootMenu]);
+    return () => document.removeEventListener("click", close);
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (inlineAction && inlineInputRef.current) {
+      inlineInputRef.current.focus();
+      inlineInputRef.current.select();
+    }
+  }, [inlineAction]);
+
+  const handleInlineSubmit = useCallback(async () => {
+    if (!inlineAction || !inlineValue) { setInlineAction(null); return; }
+    try {
+      if (inlineAction.type === "rename") {
+        await fetchJSON("/server/files/rename", {
+          method: "POST",
+          body: JSON.stringify({ path: inlineAction.path, newName: inlineValue }),
+        });
+      } else {
+        await fetchJSON("/server/files/create", {
+          method: "POST",
+          body: JSON.stringify({ kind: inlineAction.type === "create-dir" ? "dir" : "file", name: inlineValue, parent: inlineAction.path }),
+        });
+      }
+      handleRefresh();
+    } catch { /* ignore */ }
+    setInlineAction(null);
+    setInlineValue("");
+  }, [inlineAction, inlineValue, handleRefresh]);
 
   const handleDelete = useCallback(async (paths: string[]) => {
     if (!confirm(`确定删除 ${paths.length} 个项目？`)) return;
@@ -555,17 +506,18 @@ const FileTree = forwardRef<FileTreeHandle, {
     }
   }, [handleDrop, draggingPath, onUpload]);
 
+  const menuPath = contextMenu?.path;
+  const menuIsDir = contextMenu?.isDir ?? false;
+  const hasMulti = menuPath ? selectedPaths.size > 1 && selectedPaths.has(menuPath) : false;
+  const effectivePaths = menuPath ? (hasMulti ? Array.from(selectedPaths) : [menuPath]) : [];
+
   return (
     <div className="file-browser-tree"
       role="tree"
       onContextMenu={(e) => {
         if (e.target === e.currentTarget) {
           e.preventDefault();
-          if (activeMenuRef.current) {
-            activeMenuRef.current();
-            activeMenuRef.current = null;
-          }
-          setRootMenu({ x: e.clientX, y: e.clientY });
+          openMenu(e.clientX, e.clientY, "/", true);
         }
       }}
       onDragOver={(e) => {
@@ -588,14 +540,70 @@ const FileTree = forwardRef<FileTreeHandle, {
             onUpload={onUpload} onRequestUpload={onRequestUpload}
             draggingPath={draggingPath}
             isLast={idx === rootEntries.length - 1} parentGuides={[]}
-            registerVisible={registerVisible} />
+            registerVisible={registerVisible}
+            onOpenMenu={openMenu} menuTargetPath={contextMenu?.path ?? null} />
         ))
       )}
-      {rootMenu && clipboardPaths.length > 0 && (
-        <div className="tree-context-menu" style={{ left: rootMenu.x, top: rootMenu.y }}>
-          <button type="button" onClick={() => { onPaste("/"); setRootMenu(null); }}>
-            粘贴到根目录 {clipboardMode === "cut" ? "✂" : "📋"} ({clipboardPaths.length})
-          </button>
+
+      {contextMenu && (
+        <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          {inlineAction ? (
+            <div style={{ padding: "4px 8px" }}>
+              <input ref={inlineInputRef} className="tree-inline-input" style={{ width: "100%" }}
+                placeholder={inlineAction.type === "rename" ? "重命名..." : inlineAction.type === "create-dir" ? "新建文件夹..." : "新建文件..."}
+                value={inlineValue} onChange={(e) => setInlineValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleInlineSubmit(); if (e.key === "Escape") { setInlineAction(null); setInlineValue(""); } }}
+                onBlur={handleInlineSubmit} />
+            </div>
+          ) : (
+            <>
+              {menuIsDir && (
+                <>
+                  <button type="button" onClick={() => { setInlineAction({ type: "create-file", path: menuPath! }); setInlineValue(""); }}>新建文件</button>
+                  <button type="button" onClick={() => { setInlineAction({ type: "create-dir", path: menuPath! }); setInlineValue(""); }}>新建文件夹</button>
+                  <button type="button" onClick={() => { onRequestUpload(menuPath!); closeMenu(); }}>上传到此目录</button>
+                  <div className="ctx-divider" />
+                </>
+              )}
+              {menuPath !== "/" && (
+                <button type="button" onClick={async () => {
+                  const dirPath = menuIsDir ? menuPath! : menuPath!.substring(0, menuPath!.lastIndexOf("/")) || "/";
+                  closeMenu();
+                  try {
+                    const result = await api.addProject(dirPath);
+                    window.location.href = `/new-session?projectId=${encodeURIComponent(result.project.id)}`;
+                  } catch (err) {
+                    console.error("Failed to create session:", err);
+                  }
+                }}>在此目录新建会话</button>
+              )}
+              <button type="button" onClick={() => { onCopy(effectivePaths); closeMenu(); }}>
+                复制{hasMulti ? ` (${effectivePaths.length})` : ""}
+              </button>
+              <button type="button" onClick={() => { onCut(effectivePaths); closeMenu(); }}>
+                剪切{hasMulti ? ` (${effectivePaths.length})` : ""}
+              </button>
+              {clipboardPaths.length > 0 && menuIsDir && (
+                <button type="button" onClick={() => { onPaste(menuPath!); closeMenu(); }}>
+                  粘贴 {clipboardMode === "cut" ? "✂" : "📋"} ({clipboardPaths.length})
+                </button>
+              )}
+              {menuPath !== "/" && (
+                <>
+                  <div className="ctx-divider" />
+                  <button type="button" onClick={() => { setInlineAction({ type: "rename", path: menuPath! }); setInlineValue(menuPath!.split("/").pop() ?? ""); }}>重命名</button>
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(effectivePaths.join("\n")); closeMenu(); }}>复制路径</button>
+                  <button type="button" onClick={() => { onDownload(effectivePaths); closeMenu(); }}>
+                    下载{hasMulti ? ` (${effectivePaths.length})` : ""}
+                  </button>
+                  <div className="ctx-divider" />
+                  <button type="button" className="danger" onClick={() => { handleDelete(effectivePaths); closeMenu(); }}>
+                    删除{hasMulti ? ` (${effectivePaths.length})` : ""}
+                  </button>
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

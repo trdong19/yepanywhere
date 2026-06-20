@@ -175,8 +175,6 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
     return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
   };
 
-  const showMenu = menuTargetPath === entry.path;
-
   return (
     <div className="tree-node">
       <div
