@@ -75,8 +75,8 @@ function isAncestorOf(ancestor: string, path: string) {
   return path === ancestor || path.startsWith(a);
 }
 
-// Global: close any open context menu before opening a new one
-let activeMenuCloseFn: (() => void) | null = null;
+// Global mutable ref: always points to the latest menu close function
+const activeMenuRef: { current: (() => void) | null } = { current: null };
 
 function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, refreshKey, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onDragStart, onDragEnd, onDrop, onUpload, onRequestUpload, draggingPath, isLast, parentGuides, registerVisible }: TreeProps) {
   const [expanded, setExpanded] = useState(false);
@@ -110,9 +110,9 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     const touch = e.touches[0];
     if (!touch) return;
     // Close any previously open menu immediately
-    if (activeMenuCloseFn) {
-      activeMenuCloseFn();
-      activeMenuCloseFn = null;
+    if (activeMenuRef.current) {
+      activeMenuRef.current();
+      activeMenuRef.current = null;
     }
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
@@ -190,14 +190,14 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     if (!contextMenu) return;
     const close = () => {
       setContextMenu(null);
-      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
+      if (activeMenuRef.current === close) activeMenuRef.current = null;
     };
-    activeMenuCloseFn = close;
+    activeMenuRef.current = close;
     // Desktop: close on outside click
     document.addEventListener("click", close);
     return () => {
       document.removeEventListener("click", close);
-      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
+      if (activeMenuRef.current === close) activeMenuRef.current = null;
     };
   }, [contextMenu]);
 
@@ -302,9 +302,9 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
           if (!selectedPaths.has(entry.path)) {
             onSelect(entry.path, entry.isDir, "single");
           }
-          if (activeMenuCloseFn) {
-            activeMenuCloseFn();
-            activeMenuCloseFn = null;
+          if (activeMenuRef.current) {
+            activeMenuRef.current();
+            activeMenuRef.current = null;
           }
           setContextMenu({ x: e.clientX, y: e.clientY });
         }}
@@ -508,13 +508,13 @@ const FileTree = forwardRef<FileTreeHandle, {
     if (!rootMenu) return;
     const close = () => {
       setRootMenu(null);
-      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
+      if (activeMenuRef.current === close) activeMenuRef.current = null;
     };
-    activeMenuCloseFn = close;
+    activeMenuRef.current = close;
     document.addEventListener("click", close);
     return () => {
       document.removeEventListener("click", close);
-      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
+      if (activeMenuRef.current === close) activeMenuRef.current = null;
     };
   }, [rootMenu]);
 
@@ -561,9 +561,9 @@ const FileTree = forwardRef<FileTreeHandle, {
       onContextMenu={(e) => {
         if (e.target === e.currentTarget) {
           e.preventDefault();
-          if (activeMenuCloseFn) {
-            activeMenuCloseFn();
-            activeMenuCloseFn = null;
+          if (activeMenuRef.current) {
+            activeMenuRef.current();
+            activeMenuRef.current = null;
           }
           setRootMenu({ x: e.clientX, y: e.clientY });
         }

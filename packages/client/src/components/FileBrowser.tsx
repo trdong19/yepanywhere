@@ -5,14 +5,18 @@ import "./FileBrowser.css";
 const LONG_PRESS_MS = 500;
 const MOVE_CANCEL_PX = 10;
 
-// Global ref: the close function of the currently open context menu (if any)
-let activeMenuCloseFn: (() => void) | null = null;
-
 interface DirEntry {
   name: string;
   isDir: boolean;
   size: number;
   path: string;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  path: string;
+  isDir: boolean;
 }
 
 interface TreeNodeProps {
@@ -24,6 +28,8 @@ interface TreeNodeProps {
   onDelete: (path: string) => void;
   onRename: (path: string, oldName: string) => void;
   onRefresh: () => void;
+  onOpenMenu: (x: number, y: number, path: string, isDir: boolean) => void;
+  menuTargetPath: string | null;
 }
 
 function FileIcon({ isDir }: { isDir: boolean }) {
@@ -42,11 +48,10 @@ function FileIcon({ isDir }: { isDir: boolean }) {
   );
 }
 
-function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, onRename, onRefresh }: TreeNodeProps) {
+function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, onRename, onRefresh, onOpenMenu, menuTargetPath }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(entry.name);
   const [creating, setCreating] = useState<"file" | "dir" | null>(null);
@@ -68,18 +73,13 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
-    // Close any previously open menu first
-    if (activeMenuCloseFn) {
-      activeMenuCloseFn();
-      activeMenuCloseFn = null;
-    }
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true;
-      setContextMenu({ x: touch.clientX, y: touch.clientY });
+      onOpenMenu(touch.clientX, touch.clientY, entry.path, entry.isDir);
     }, LONG_PRESS_MS);
-  }, []);
+  }, [onOpenMenu, entry.path, entry.isDir]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
@@ -103,6 +103,8 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
       longPressTriggeredRef.current = false;
     }
   }, []);
+
+  useEffect(() => clearLongPress, [clearLongPress]);
 
   const loadChildren = useCallback(async () => {
     if (!entry.isDir) return;
@@ -128,25 +130,8 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  }, []);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => {
-      setContextMenu(null);
-      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
-    };
-    activeMenuCloseFn = close;
-    // Desktop: close on outside click
-    document.addEventListener("click", close);
-    return () => {
-      document.removeEventListener("click", close);
-      if (activeMenuCloseFn === close) activeMenuCloseFn = null;
-    };
-  }, [contextMenu]);
-
-  useEffect(() => clearLongPress, [clearLongPress]);
+    onOpenMenu(e.clientX, e.clientY, entry.path, entry.isDir);
+  }, [onOpenMenu, entry.path, entry.isDir]);
 
   useEffect(() => {
     if ((renaming || creating) && inputRef.current) {
@@ -189,6 +174,8 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
   };
+
+  const showMenu = menuTargetPath === entry.path;
 
   return (
     <div className="tree-node">
@@ -246,25 +233,10 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
             children.map((child) => (
               <TreeNode key={child.path} entry={child} projectId={projectId} depth={depth + 1}
                 selectedPath={selectedPath} onSelect={onSelect} onDelete={onDelete}
-                onRename={onRename} onRefresh={onRefresh} />
+                onRename={onRename} onRefresh={onRefresh}
+                onOpenMenu={onOpenMenu} menuTargetPath={menuTargetPath} />
             ))
           )}
-        </div>
-      )}
-
-      {contextMenu && (
-        <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
-          {entry.isDir && (
-            <>
-              <button type="button" onClick={() => { setCreating("file"); setContextMenu(null); }}>新建文件</button>
-              <button type="button" onClick={() => { setCreating("dir"); setContextMenu(null); }}>新建文件夹</button>
-              <div className="ctx-divider" />
-            </>
-          )}
-          <button type="button" onClick={() => { setRenaming(true); setContextMenu(null); }}>重命名</button>
-          <button type="button" onClick={() => { navigator.clipboard.writeText(entry.path); setContextMenu(null); }}>复制路径</button>
-          <div className="ctx-divider" />
-          <button type="button" className="danger" onClick={() => { onDelete(entry.path); setContextMenu(null); }}>删除</button>
         </div>
       )}
     </div>
@@ -285,6 +257,12 @@ export const FileBrowser = forwardRef<FileBrowserHandle, FileBrowserProps>(
   const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState<"file" | "dir" | null>(null);
+  const [createName, setCreateName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const loadRoot = useCallback(async () => {
     setLoading(true);
@@ -324,6 +302,57 @@ export const FileBrowser = forwardRef<FileBrowserHandle, FileBrowserProps>(
     } catch { /* ignore */ }
   }, [projectId, loadRoot]);
 
+  const closeMenu = useCallback(() => setContextMenu(null), []);
+
+  const openMenu = useCallback((x: number, y: number, path: string, isDir: boolean) => {
+    setContextMenu({ x, y, path, isDir });
+    setSelectedPath(path);
+  }, []);
+
+  // Close menu on outside click (desktop)
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close);
+    return () => {
+      document.removeEventListener("click", close);
+    };
+  }, [contextMenu]);
+
+  const handleMenuCreate = async (kind: "file" | "dir") => {
+    if (!contextMenu || !createName) return;
+    try {
+      await fetchJSON(`/projects/${projectId}/files/create`, {
+        method: "POST",
+        body: JSON.stringify({ kind, name: createName, parent: contextMenu.path }),
+      });
+      loadRoot();
+    } catch { /* ignore */ }
+    setCreating(null);
+    setCreateName("");
+    setContextMenu(null);
+  };
+
+  const handleMenuRename = async () => {
+    if (!contextMenu || !newName) return;
+    try {
+      await fetchJSON(`/projects/${projectId}/files/rename`, {
+        method: "POST",
+        body: JSON.stringify({ path: contextMenu.path, newName }),
+      });
+      loadRoot();
+    } catch { /* ignore */ }
+    setRenaming(false);
+    setContextMenu(null);
+  };
+
+  useEffect(() => {
+    if ((renaming || creating) && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [renaming, creating]);
+
   return (
     <div className="file-browser">
       <div className="file-browser-header">
@@ -343,10 +372,46 @@ export const FileBrowser = forwardRef<FileBrowserHandle, FileBrowserProps>(
           rootEntries.map((entry) => (
             <TreeNode key={entry.path} entry={entry} projectId={projectId} depth={0}
               selectedPath={selectedPath} onSelect={handleSelect} onDelete={handleDelete}
-              onRename={handleRename} onRefresh={loadRoot} />
+              onRename={handleRename} onRefresh={loadRoot}
+              onOpenMenu={openMenu} menuTargetPath={contextMenu?.path ?? null} />
           ))
         )}
       </div>
+
+      {contextMenu && (
+        <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          {renaming ? (
+            <div className="tree-inline-input-wrapper">
+              <input ref={inputRef} className="tree-inline-input" value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleMenuRename(); if (e.key === "Escape") setRenaming(false); }}
+                onBlur={handleMenuRename} />
+            </div>
+          ) : creating ? (
+            <div className="tree-inline-input-wrapper">
+              <input ref={inputRef} className="tree-inline-input"
+                placeholder={creating === "dir" ? "新建文件夹..." : "新建文件..."}
+                value={createName} onChange={(e) => setCreateName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleMenuCreate(creating); if (e.key === "Escape") { setCreating(null); setCreateName(""); } }}
+                onBlur={() => handleMenuCreate(creating)} />
+            </div>
+          ) : (
+            <>
+              {contextMenu.isDir && (
+                <>
+                  <button type="button" onClick={() => { setCreating("file"); setCreateName(""); }}>新建文件</button>
+                  <button type="button" onClick={() => { setCreating("dir"); setCreateName(""); }}>新建文件夹</button>
+                  <div className="ctx-divider" />
+                </>
+              )}
+              <button type="button" onClick={() => { setRenaming(true); setNewName(contextMenu.path.split("/").pop() ?? ""); }}>重命名</button>
+              <button type="button" onClick={() => { navigator.clipboard.writeText(contextMenu.path); closeMenu(); }}>复制路径</button>
+              <div className="ctx-divider" />
+              <button type="button" className="danger" onClick={() => { handleDelete(contextMenu.path); closeMenu(); }}>删除</button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 });
