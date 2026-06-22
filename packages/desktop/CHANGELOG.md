@@ -2,25 +2,25 @@
 
 ## [0.0.4] - 2026-06-22
 
-### Added
-- ntfy push notification service: session idle, waiting-input, and termination events
-- ntfy settings page with enable toggle, server URL, topic, and test button
-- File manager: copy/cut/paste files and directories
-- File manager: drag-and-drop to move files between directories
-- File manager: upload and download files from context menu and toolbar
-- File manager: multi-select with Ctrl+click and Shift+click
-- File manager: toast notifications for all operations (copy, paste, delete, rename, create)
-- File manager: tree row height setting in appearance settings (24-48px slider)
-- File manager: "Create session in this directory" in context menu
-- File manager: image preview when selecting image files
+### 新增
+- ntfy 推送通知：会话完成、需要审批/输入、异常终止时推送通知到手机
+- ntfy 设置页面：启用开关、服务器地址、主题配置、测试按钮
+- 文件管理器：复制/剪切/粘贴文件和目录
+- 文件管理器：拖拽移动文件到目标目录
+- 文件管理器：右键菜单和工具栏上传/下载文件
+- 文件管理器：Ctrl+点击多选、Shift+点击范围选择
+- 文件管理器：操作成功/失败 Toast 通知提示
+- 文件管理器：文件树行高设置（外观设置 24-48px 滑块）
+- 文件管理器：右键「在此目录新建会话」
+- 文件管理器：选中图片文件时直接预览
 
-### Fixed
-- Android file manager long-press freeze: transparent touch overlay blocks native contextmenu
-- Mobile user turn navigation showing system messages
-- "Load from this turn" not working due to message truncation
-- Mobile speech input icon rapid flickering
-- Android browser tab switch losing latest messages
-- Page refresh stuck at "load from this turn" position
+### 修复
+- Android 文件管理器长按菜单卡死：透明遮罩拦截浏览器原生长按检测
+- 手机端用户回合导航混入系统消息
+- 「从此回合加载」因消息截断不生效
+- 手机端语音输入图标快速闪烁
+- Android 切回浏览器丢失最新消息
+- 页面刷新后卡在「从此回合」位置
 
 ## [0.0.3] - 2026-06-01
 
