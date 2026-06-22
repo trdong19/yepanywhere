@@ -9,12 +9,16 @@ on:
     paths:
       - 'packages/desktop/**'
       - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'packages/server/**'
       - '.github/workflows/desktop-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'packages/desktop/**'
       - 'packages/shared/**'
+      - 'packages/client/**'
+      - 'packages/server/**'
       - '.github/workflows/desktop-ci.yml'
 
 permissions:
@@ -29,14 +33,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
-            rust_target: aarch64-apple-darwin
-            target_triple: aarch64-apple-darwin
-          - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
-            rust_target: x86_64-apple-darwin
-            target_triple: x86_64-apple-darwin
           - platform: windows-latest
             args: ''
             rust_target: ''
