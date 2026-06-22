@@ -1303,6 +1303,11 @@ export const api = {
       ),
     }),
 
+  testNtfyNotification: () =>
+    fetchJSON<{ success: boolean }>("/settings/ntfy-test", {
+      method: "POST",
+    }),
+
   discoverHelperTargetModels: (baseUrl: string) =>
     fetchJSON<{ baseUrl: string; models: ModelInfo[] }>(
       "/settings/helper-targets/models",
@@ -1518,6 +1523,12 @@ export interface ServerSettings {
   deferredJoinWindowSeconds?: number;
   /** Whether delivered queued turns receive compose-time staleness anchors. */
   composeAnchorsEnabled?: boolean;
+  /** Whether ntfy push notifications are enabled */
+  ntfyEnabled?: boolean;
+  /** ntfy server URL */
+  ntfyUrl?: string;
+  /** ntfy topic */
+  ntfyTopic?: string;
 }
 
 export type RelayClientStatus =

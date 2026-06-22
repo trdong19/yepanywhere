@@ -42,6 +42,7 @@ import {
   isValidSshHostAlias,
   normalizeSshHostAlias,
 } from "../utils/sshHostAlias.js";
+import type { NtfyService } from "../notifications/NtfyService.js";
 
 const HELPER_TARGET_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const MAX_HELPER_TARGETS = 20;
@@ -91,6 +92,8 @@ export interface SettingsRoutesDeps {
   onGrokBuildUseXaiApiKeyChanged?: (enabled: boolean) => void;
   /** Public share storage, used to revoke existing shares when disabled */
   publicShareService?: PublicShareService;
+  /** NtfyService for sending test notifications */
+  ntfyService?: NtfyService;
 }
 
 function parseHostAliasList(rawHosts: unknown[]): {
@@ -897,6 +900,32 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
       }
     }
 
+    if (typeof body.ntfyEnabled === "boolean") {
+      updates.ntfyEnabled = body.ntfyEnabled;
+    }
+    if ("ntfyUrl" in body) {
+      if (
+        body.ntfyUrl === undefined ||
+        body.ntfyUrl === null ||
+        body.ntfyUrl === ""
+      ) {
+        updates.ntfyUrl = undefined;
+      } else if (typeof body.ntfyUrl === "string") {
+        updates.ntfyUrl = body.ntfyUrl.slice(0, 2000);
+      }
+    }
+    if ("ntfyTopic" in body) {
+      if (
+        body.ntfyTopic === undefined ||
+        body.ntfyTopic === null ||
+        body.ntfyTopic === ""
+      ) {
+        updates.ntfyTopic = undefined;
+      } else if (typeof body.ntfyTopic === "string") {
+        updates.ntfyTopic = body.ntfyTopic.slice(0, 200);
+      }
+    }
+
     if ("codexUpdatePolicy" in body) {
       if (
         body.codexUpdatePolicy === undefined ||
@@ -1032,6 +1061,21 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
 
     const result = await testSSHConnection(host);
     return c.json(result);
+  });
+
+  /**
+   * POST /api/settings/ntfy-test
+   * Send a test ntfy notification
+   */
+  app.post("/ntfy-test", async (c) => {
+    if (!deps.ntfyService) {
+      return c.json({ error: "ntfy service not available" }, 503);
+    }
+    const result = await deps.ntfyService.sendTest();
+    if (!result.success) {
+      return c.json({ success: false, error: result.error }, 400);
+    }
+    return c.json({ success: true });
   });
 
   return app;

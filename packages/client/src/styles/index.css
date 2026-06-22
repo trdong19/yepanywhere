@@ -8180,6 +8180,12 @@ a.sidebar-nav-item {
   margin-top: var(--space-1);
 }
 
+.settings-success {
+  color: var(--app-yep-green);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-1);
+}
+
 .settings-warning-box {
   background: color-mix(
     in srgb,
@@ -14606,4 +14612,12 @@ body:has(.session-page)
   font-size: 12px;
   color: var(--text-tertiary, #666);
   font-style: italic;
+}
+
+/* File tree rows: disable mobile tap highlight which can get stuck after long-press */
+.tree-row {
+  -webkit-tap-highlight-color: transparent;
+}
+.tree-row:active {
+  opacity: 1 !important;
 }

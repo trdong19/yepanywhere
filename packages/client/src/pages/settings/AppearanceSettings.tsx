@@ -7,6 +7,7 @@ import {
   useContentMaxWidth,
 } from "../../hooks/useContentMaxWidth";
 import { useDeveloperMode } from "../../hooks/useDeveloperMode";
+import { useFileTreeRowHeight } from "../../hooks/useFileTreeRowHeight";
 import { useFloatingActionButtonEnabled } from "../../hooks/useFloatingActionButtonEnabled";
 import { FONT_SIZES, useFontSize } from "../../hooks/useFontSize";
 import { useFunPhrases } from "../../hooks/useFunPhrases";
@@ -122,6 +123,7 @@ export function AppearanceSettings() {
   const { funPhrasesEnabled, setFunPhrasesEnabled } = useFunPhrases();
   const { floatingActionButtonEnabled, setFloatingActionButtonEnabled } =
     useFloatingActionButtonEnabled();
+  const { height: treeRowHeight, setHeight: setTreeRowHeight, MIN_HEIGHT: TREE_MIN, MAX_HEIGHT: TREE_MAX, DEFAULT_HEIGHT: TREE_DEFAULT } = useFileTreeRowHeight();
   const { tabTitleActivityEnabled, setTabTitleActivityEnabled } =
     useTabTitleActivityPreference();
   const { showConnectionBars, setShowConnectionBars } = useDeveloperMode();
@@ -1006,6 +1008,26 @@ export function AppearanceSettings() {
             />
             <span className="toggle-slider" />
           </label>
+        </div>
+        <div className="settings-item">
+          <div className="settings-item-info">
+            <strong>文件管理行高</strong>
+            <p>调整文件树每行的高度（{TREE_MIN}-{TREE_MAX}px）</p>
+          </div>
+          <div className="settings-item-actions">
+            <input
+              type="range"
+              min={TREE_MIN}
+              max={TREE_MAX}
+              step={2}
+              value={treeRowHeight}
+              onChange={(e) => setTreeRowHeight(Number(e.target.value))}
+              style={{ width: 120 }}
+            />
+            <span style={{ fontSize: 13, color: "var(--text-secondary)", minWidth: 36, textAlign: "right" }}>{treeRowHeight}px</span>
+            <button type="button" className="settings-button settings-button-secondary"
+              onClick={() => setTreeRowHeight(TREE_DEFAULT)}>重置</button>
+          </div>
         </div>
       </div>
     </section>

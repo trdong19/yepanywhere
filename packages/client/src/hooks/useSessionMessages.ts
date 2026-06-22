@@ -108,6 +108,10 @@ interface SessionLoadCacheGlobal {
   __YA_SESSION_LOAD_CACHE__?: Map<string, SessionLoadCacheEntry>;
 }
 
+/** Max recent messages to persist in sessionStorage (keeps storage small) */
+const SESSION_CACHE_MAX_MESSAGES = 50;
+const SESSION_STORAGE_PREFIX = "__ya_session_cache:";
+
 function cloneForCache<T>(value: T): T {
   if (typeof structuredClone === "function") {
     return structuredClone(value);
@@ -151,9 +155,27 @@ function readSessionLoadCache(
   tailFrom?: string,
 ): SessionLoadCacheEntry | undefined {
   if (typeof window === "undefined") return undefined;
-  return getSessionLoadCache().get(
-    getSessionLoadVariantKey({ projectId, sessionId, tailTurns, tailFrom }),
-  );
+  const key = getSessionLoadVariantKey({
+    projectId,
+    sessionId,
+    tailTurns,
+    tailFrom,
+  });
+  // Try in-memory cache first (fast, survives within same tab)
+  const memHit = getSessionLoadCache().get(key);
+  if (memHit) return memHit;
+  // Fall back to sessionStorage (survives page reload from tab discard)
+  try {
+    const stored = sessionStorage.getItem(SESSION_STORAGE_PREFIX + key);
+    if (stored) {
+      const entry = JSON.parse(stored) as SessionLoadCacheEntry;
+      getSessionLoadCache().set(key, entry);
+      return entry;
+    }
+  } catch {
+    // sessionStorage may be full or unavailable
+  }
+  return undefined;
 }
 
 function writeSessionLoadCache(
@@ -164,10 +186,28 @@ function writeSessionLoadCache(
   tailFrom?: string,
 ): void {
   if (typeof window === "undefined") return;
-  getSessionLoadCache().set(
-    getSessionLoadVariantKey({ projectId, sessionId, tailTurns, tailFrom }),
-    cloneForCache(entry),
-  );
+  const key = getSessionLoadVariantKey({
+    projectId,
+    sessionId,
+    tailTurns,
+    tailFrom,
+  });
+  const cloned = cloneForCache(entry);
+  getSessionLoadCache().set(key, cloned);
+  // Persist to sessionStorage so a full page reload (tab discard) can warm-load
+  try {
+    const forStorage: SessionLoadCacheEntry = {
+      ...cloned,
+      // Only keep recent messages to stay within sessionStorage limits (~5MB)
+      messages: cloned.messages.slice(-SESSION_CACHE_MAX_MESSAGES),
+    };
+    sessionStorage.setItem(
+      SESSION_STORAGE_PREFIX + key,
+      JSON.stringify(forStorage),
+    );
+  } catch {
+    // sessionStorage full — in-memory cache still works within this tab
+  }
 }
 
 function isCodexProvider(provider?: string): boolean {

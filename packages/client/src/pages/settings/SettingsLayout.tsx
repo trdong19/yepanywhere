@@ -19,6 +19,7 @@ import { DevicesSettings } from "./DevicesSettings";
 import { EmulatorSettings } from "./EmulatorSettings";
 import { LifecycleWebhooksSettings } from "./LifecycleWebhooksSettings";
 import { LocalAccessSettings } from "./LocalAccessSettings";
+import { NtfySettings } from "./NtfySettings";
 import { MessageDeliverySettings } from "./MessageDeliverySettings";
 import { ModelSettings } from "./ModelSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
@@ -43,6 +44,7 @@ const CATEGORY_COMPONENTS: Record<string, React.ComponentType> = {
   "agent-context": AgentContextSettings,
   notifications: NotificationsSettings,
   webhooks: LifecycleWebhooksSettings,
+  ntfy: NtfySettings,
   devices: DevicesSettings,
   "local-access": LocalAccessSettings,
   remote: RemoteAccessSettings,

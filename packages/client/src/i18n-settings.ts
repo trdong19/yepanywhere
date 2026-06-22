@@ -130,6 +130,11 @@ export function getSettingsCategories(
       description: t("settingsWebhooksDescription"),
     },
     {
+      id: "ntfy",
+      label: t("ntfyTitle"),
+      description: t("ntfyDescription"),
+    },
+    {
       id: "devices",
       label: t("settingsDevicesTitle"),
       description: t("settingsDevicesDescription"),

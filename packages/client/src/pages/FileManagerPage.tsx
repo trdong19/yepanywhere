@@ -1,6 +1,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, fetchJSON, getDesktopAuthToken } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
+import { useToastContext } from "../contexts/ToastContext";
+import { useFileTreeRowHeight } from "../hooks/useFileTreeRowHeight";
 import { useI18n } from "../i18n";
 import { MainContent, useNavigationLayout } from "../layouts";
 import "./FileBrowserPage.css";
@@ -160,6 +163,13 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
     }
   }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-expand when menuTargetPath matches this directory
+  useEffect(() => {
+    if (menuTargetPath === entry.path && entry.isDir && !expanded) {
+      void loadChildren().then(() => setExpanded(true));
+    }
+  }, [menuTargetPath, entry.path, entry.isDir, expanded, loadChildren]);
+
   const toggleExpand = useCallback(async () => {
     if (!entry.isDir) return;
     if (!expanded) await loadChildren();
@@ -182,7 +192,7 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
       inputRef.current.focus();
       inputRef.current.select();
     }
-  }, [renaming, creating]);
+  }, [renaming, creating, expanded]);
 
   const handleRenameSubmit = async () => {
     if (newName && newName !== entry.name) {
@@ -252,6 +262,8 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
       <div
         className={`tree-row ${isSelected ? "selected" : ""} ${isDragging ? "tree-dragging" : ""} ${dragOver ? "tree-drag-over" : ""}`}
         style={{ paddingLeft: `${depth * 20 + 4}px` }}
+        data-path={entry.path}
+        data-isdir={entry.isDir ? "1" : "0"}
         role="treeitem"
         tabIndex={0}
         onClick={handleClick}
@@ -309,7 +321,6 @@ function TreeNode({ entry, depth, selectedPaths, onSelect, onDelete, onRefresh, 
         )}
         {!entry.isDir && entry.size > 0 && <span className="tree-size">{formatSize(entry.size)}</span>}
       </div>
-
       {expanded && creating && (
         <div className="tree-row" style={{ paddingLeft: `${(depth + 1) * 20 + 4}px` }}>
           <span className="tree-guides" aria-hidden="true">
@@ -375,16 +386,144 @@ const FileTree = forwardRef<FileTreeHandle, {
   onUpload: (files: FileList, destDir: string) => void;
   onRequestUpload: (destDir: string) => void;
   anchorPath: string | null;
+  showToast: (msg: string, type: "success" | "error" | "info") => void;
 }>(
-  function FileTree({ selectedPaths, onSelect, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onUpload, onRequestUpload, anchorPath }, ref) {
+  function FileTree({ selectedPaths, onSelect, clipboardPaths, clipboardMode, onCopy, onCut, onPaste, onDownload, onUpload, onRequestUpload, anchorPath, showToast }, ref) {
   const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string; isDir: boolean } | null>(null);
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
+  const [menuTargetPath, setMenuTargetPath] = useState<string | null>(null);
   const [inlineAction, setInlineAction] = useState<{ type: "rename" | "create-file" | "create-dir"; path: string } | null>(null);
   const [inlineValue, setInlineValue] = useState("");
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+
+  const closeMenu = useCallback(() => setContextMenu(null), []);
+  const openMenu = useCallback((x: number, y: number, path: string, isDir: boolean) => {
+    setContextMenu({ x, y, path, isDir });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (inlineAction && inlineInputRef.current) {
+      inlineInputRef.current.focus();
+      inlineInputRef.current.select();
+    }
+  }, [inlineAction]);
+
+  // ── Mobile: touch overlay for long-press + scroll ──
+  // On Android, native long-press fires contextmenu → pointercancel, corrupting
+  // the touch system. A transparent overlay with touch-action:none blocks native
+  // gesture detection. Long-press and scroll are handled manually here.
+  const isMobileRef = useRef(typeof window !== "undefined" && window.matchMedia("(hover: none) and (pointer: coarse)").matches);
+  const mobileLpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileLpFiredRef = useRef(false);
+  const mobileLpTimeRef = useRef(0); // timestamp when long-press fired
+  const mobileTouchActiveRef = useRef(false); // true while finger is down
+  const mobileTouchRef = useRef<{ x: number; y: number; scrollTop: number } | null>(null);
+  const mobileOverlayRef = useRef<HTMLDivElement>(null);
+  const selectedPathsRef = useRef(selectedPaths);
+  selectedPathsRef.current = selectedPaths;
+
+  const clearMobileLp = useCallback(() => {
+    if (mobileLpTimerRef.current) { clearTimeout(mobileLpTimerRef.current); mobileLpTimerRef.current = null; }
+    mobileTouchRef.current = null;
+  }, []);
+
+  const handleMobilePointerDown = useCallback((e: React.PointerEvent) => {
+    console.log("[LP] pointerdown at", e.clientX, e.clientY);
+    clearMobileLp();
+    const cx = e.clientX; const cy = e.clientY;
+    mobileTouchRef.current = { x: cx, y: cy, scrollTop: treeContainerRef.current?.scrollTop ?? 0 };
+    mobileLpFiredRef.current = false;
+    mobileLpTimerRef.current = setTimeout(() => {
+      mobileLpTimerRef.current = null;
+      mobileLpFiredRef.current = true;
+      // Temporarily hide overlay to find tree-row underneath
+      const overlay = mobileOverlayRef.current;
+      if (overlay) overlay.style.display = "none";
+      const hit = document.elementFromPoint(cx, cy);
+      if (overlay) overlay.style.display = "";
+      const row = hit?.closest?.(".tree-row") as HTMLElement | null;
+      if (!row) return;
+      const path = row.dataset.path;
+      const isDir = row.dataset.isdir === "1";
+      if (!path) return;
+      mobileLpTimeRef.current = Date.now();
+      // Don't call onSelect — it triggers sidebar collapse on mobile
+      openMenu(cx, cy, path, isDir === true);
+    }, 500);
+  }, [clearMobileLp, openMenu]);
+
+  const handleMobilePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!mobileTouchRef.current) return;
+    const dx = Math.abs(e.clientX - mobileTouchRef.current.x);
+    const dy = Math.abs(e.clientY - mobileTouchRef.current.y);
+    if (dx > 20 || dy > 20) {
+      if (mobileLpTimerRef.current) {
+        clearTimeout(mobileLpTimerRef.current);
+        mobileLpTimerRef.current = null;
+      }
+    }
+    // Manual vertical scroll
+    if (treeContainerRef.current) {
+      treeContainerRef.current.scrollTop = mobileTouchRef.current.scrollTop + (mobileTouchRef.current.y - e.clientY);
+    }
+  }, []);
+
+  const handleMobilePointerUp = useCallback(() => { clearMobileLp(); }, [clearMobileLp]);
+
+  // Native event listeners for mobile overlay (React synthetic events may not fire on overlay)
+  useEffect(() => {
+    if (!isMobileRef.current) return;
+    const overlay = mobileOverlayRef.current;
+    if (!overlay) return;
+
+    const onDown = (e: PointerEvent) => {
+      handleMobilePointerDown(e as unknown as React.PointerEvent);
+    };
+    const onMove = (e: PointerEvent) => {
+      handleMobilePointerMove(e as unknown as React.PointerEvent);
+    };
+    const onUp = () => { handleMobilePointerUp(); };
+    const onClick = (e: MouseEvent) => {
+      // Suppress click if long-press already fired or timer is still running
+      if (mobileLpFiredRef.current) { mobileLpFiredRef.current = false; return; }
+      if (mobileLpTimerRef.current) return;
+      if (Date.now() - mobileLpTimeRef.current < 1000) return;
+      const saved = overlay.style.display;
+      overlay.style.display = "none";
+      const hit = document.elementFromPoint(e.clientX, e.clientY);
+      overlay.style.display = saved;
+      const row = hit?.closest?.(".tree-row") as HTMLElement | null;
+      if (row) row.click();
+    };
+
+    overlay.addEventListener("pointerdown", onDown, { passive: false });
+    overlay.addEventListener("pointermove", onMove);
+    overlay.addEventListener("pointerup", onUp);
+    overlay.addEventListener("pointercancel", onUp);
+    overlay.addEventListener("click", onClick);
+    return () => {
+      overlay.removeEventListener("pointerdown", onDown);
+      overlay.removeEventListener("pointermove", onMove);
+      overlay.removeEventListener("pointerup", onUp);
+      overlay.removeEventListener("pointercancel", onUp);
+      overlay.removeEventListener("click", onClick);
+    };
+  }, [handleMobilePointerDown, handleMobilePointerMove, handleMobilePointerUp]);
+
+  // Close menu on outside tap (mobile)
+  useEffect(() => {
+    if (!contextMenu || !isMobileRef.current) return;
+    const close = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest?.(".tree-context-menu")) { closeMenu(); }
+    };
+    document.addEventListener("click", close, true);
+    return () => document.removeEventListener("click", close, true);
+  }, [contextMenu, closeMenu]);
 
   // Visible order tracking for range selection.
   const visibleOrderRef = useRef<string[]>([]);
@@ -429,12 +568,30 @@ const FileTree = forwardRef<FileTreeHandle, {
   useImperativeHandle(ref, () => ({ refresh: handleRefresh }), [handleRefresh]);
   useEffect(() => { loadRoot(); }, [loadRoot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const closeMenu = useCallback(() => setContextMenu(null), []);
-
-  const openMenu = useCallback((x: number, y: number, path: string, isDir: boolean) => {
-    setContextMenu({ x, y, path, isDir });
+  const handleInlineSubmit = useCallback(async () => {
+    if (!inlineAction || !inlineValue) { setInlineAction(null); setInlineValue(""); closeMenu(); return; }
+    const action = inlineAction;
+    try {
+      if (action.type === "rename") {
+        await fetchJSON("/server/files/rename", {
+          method: "POST",
+          body: JSON.stringify({ path: action.path, newName: inlineValue }),
+        });
+        showToast("重命名成功", "success");
+      } else {
+        await fetchJSON("/server/files/create", {
+          method: "POST",
+          body: JSON.stringify({ kind: action.type === "create-dir" ? "dir" : "file", name: inlineValue, parent: action.path }),
+        });
+        showToast(`${action.type === "create-dir" ? "文件夹" : "文件"}已创建`, "success");
+        setMenuTargetPath(action.path);
+      }
+      handleRefresh();
+    } catch { showToast("操作失败", "error"); }
     setInlineAction(null);
-  }, []);
+    setInlineValue("");
+    closeMenu();
+  }, [inlineAction, inlineValue, handleRefresh, closeMenu, showToast]);
 
   // Close menu on outside click (desktop)
   useEffect(() => {
@@ -448,33 +605,6 @@ const FileTree = forwardRef<FileTreeHandle, {
     return () => document.removeEventListener("click", handler);
   }, [contextMenu]);
 
-  useEffect(() => {
-    if (inlineAction && inlineInputRef.current) {
-      inlineInputRef.current.focus();
-      inlineInputRef.current.select();
-    }
-  }, [inlineAction]);
-
-  const handleInlineSubmit = useCallback(async () => {
-    if (!inlineAction || !inlineValue) { setInlineAction(null); return; }
-    try {
-      if (inlineAction.type === "rename") {
-        await fetchJSON("/server/files/rename", {
-          method: "POST",
-          body: JSON.stringify({ path: inlineAction.path, newName: inlineValue }),
-        });
-      } else {
-        await fetchJSON("/server/files/create", {
-          method: "POST",
-          body: JSON.stringify({ kind: inlineAction.type === "create-dir" ? "dir" : "file", name: inlineValue, parent: inlineAction.path }),
-        });
-      }
-      handleRefresh();
-    } catch { /* ignore */ }
-    setInlineAction(null);
-    setInlineValue("");
-  }, [inlineAction, inlineValue, handleRefresh]);
-
   const handleDelete = useCallback(async (paths: string[]) => {
     if (!confirm(`确定删除 ${paths.length} 个项目？`)) return;
     try {
@@ -486,9 +616,10 @@ const FileTree = forwardRef<FileTreeHandle, {
           body: JSON.stringify({ paths }),
         });
       }
+      showToast(`已删除 ${paths.length} 项`, "success");
       handleRefresh();
-    } catch { /* ignore */ }
-  }, [handleRefresh]);
+    } catch { showToast("删除失败", "error"); }
+  }, [handleRefresh, showToast]);
 
   const handleDrop = useCallback(async (destDir: string) => {
     if (!draggingPath) return;
@@ -518,7 +649,7 @@ const FileTree = forwardRef<FileTreeHandle, {
   const effectivePaths = menuPath ? (hasMulti ? Array.from(selectedPaths) : [menuPath]) : [];
 
   return (
-    <div className="file-browser-tree"
+    <div ref={treeContainerRef} className="file-browser-tree"
       role="tree"
       onContextMenu={(e) => {
         if (e.target === e.currentTarget) {
@@ -533,6 +664,12 @@ const FileTree = forwardRef<FileTreeHandle, {
       }}
       onDrop={handleTreeDrop}
     >
+      {/* Mobile: transparent overlay blocks native long-press, handles long-press + scroll manually */}
+      {isMobileRef.current && (
+        <div ref={mobileOverlayRef} className="tree-touch-overlay"
+          style={{ position: "absolute", inset: 0, zIndex: 1, touchAction: "none", pointerEvents: "auto" } as React.CSSProperties}
+        />
+      )}
       {loading ? (
         <div className="tree-loading" style={{ padding: "12px" }}>加载中...</div>
       ) : (
@@ -547,18 +684,19 @@ const FileTree = forwardRef<FileTreeHandle, {
             draggingPath={draggingPath}
             isLast={idx === rootEntries.length - 1} parentGuides={[]}
             registerVisible={registerVisible}
-            onOpenMenu={openMenu} menuTargetPath={contextMenu?.path ?? null} />
+            onOpenMenu={openMenu} menuTargetPath={menuTargetPath} />
         ))
       )}
 
-      {contextMenu && (
-        <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+      {contextMenu && createPortal(
+        <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}>
           {inlineAction ? (
-            <div style={{ padding: "4px 8px", pointerEvents: "auto" }}>
+            <div style={{ padding: "6px 8px", pointerEvents: "auto" }}>
               <input ref={inlineInputRef} className="tree-inline-input" style={{ width: "100%" }}
                 placeholder={inlineAction.type === "rename" ? "重命名..." : inlineAction.type === "create-dir" ? "新建文件夹..." : "新建文件..."}
                 value={inlineValue} onChange={(e) => setInlineValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleInlineSubmit(); if (e.key === "Escape") { setInlineAction(null); setInlineValue(""); } }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleInlineSubmit(); } if (e.key === "Escape") { setInlineAction(null); setInlineValue(""); closeMenu(); } }}
                 onBlur={handleInlineSubmit} />
             </div>
           ) : (
@@ -610,7 +748,8 @@ const FileTree = forwardRef<FileTreeHandle, {
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -620,6 +759,8 @@ const FileTree = forwardRef<FileTreeHandle, {
 
 export function FileManagerPage() {
   const { t } = useI18n();
+  const { showToast } = useToastContext();
+  useFileTreeRowHeight(); // sets CSS variable
   const { isWideScreen, openSidebar, toggleSidebar, isSidebarCollapsed } = useNavigationLayout();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState("");
@@ -695,7 +836,6 @@ export function FileManagerPage() {
 
   const handleSelect = useCallback((path: string, isDir: boolean, mode: "single" | "toggle" | "range", rangePaths?: string[]) => {
     if (mode === "range" && rangePaths) {
-      // Range selection: add all range paths to current selection
       setSelectedPaths(prev => {
         const next = new Set(prev);
         for (const p of rangePaths) next.add(p);
@@ -751,12 +891,14 @@ export function FileManagerPage() {
   const handleCopy = useCallback((paths: string[]) => {
     setClipboardPaths(paths);
     setClipboardMode("copy");
-  }, []);
+    showToast(`已复制 ${paths.length} 项`, "success");
+  }, [showToast]);
 
   const handleCut = useCallback((paths: string[]) => {
     setClipboardPaths(paths);
     setClipboardMode("cut");
-  }, []);
+    showToast(`已剪切 ${paths.length} 项`, "success");
+  }, [showToast]);
 
   const handlePaste = useCallback(async (destDir: string) => {
     if (clipboardPaths.length === 0 || !clipboardMode) return;
@@ -766,14 +908,14 @@ export function FileManagerPage() {
         method: "POST",
         body: JSON.stringify({ sources: clipboardPaths, destDir }),
       });
+      showToast(`已粘贴 ${clipboardPaths.length} 项`, "success");
       if (clipboardMode === "cut") setClipboardPaths([]);
       fileTreeRef.current?.refresh();
-    } catch { /* ignore */ }
-  }, [clipboardPaths, clipboardMode]);
+    } catch { showToast("粘贴失败", "error"); }
+  }, [clipboardPaths, clipboardMode, showToast]);
 
   const handleDownload = useCallback((paths: string[]) => {
     for (const p of paths) {
-      // Only download files (skip directories)
       const a = document.createElement("a");
       a.href = `/api/server/files/raw?path=${encodeURIComponent(p)}`;
       a.download = p.split("/").pop() ?? "download";
@@ -781,7 +923,8 @@ export function FileManagerPage() {
       a.click();
       document.body.removeChild(a);
     }
-  }, []);
+    showToast(`正在下载 ${paths.length} 项`, "info");
+  }, [showToast]);
 
   const handleUpload = useCallback(async (files: FileList, destDir: string) => {
     const fileArray = Array.from(files);
@@ -883,11 +1026,6 @@ export function FileManagerPage() {
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
               </button>
-              <button type="button" className="fb-sidebar-topbar-btn" title="刷新" onClick={() => fileTreeRef.current?.refresh()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-              </button>
               <button type="button" className="fb-sidebar-topbar-btn fb-sidebar-topbar-close" title="关闭" onClick={() => setSidebarOpen(false)}>✕</button>
             </div>
           </div>
@@ -896,7 +1034,7 @@ export function FileManagerPage() {
             clipboardPaths={clipboardPaths} clipboardMode={clipboardMode}
             onCopy={handleCopy} onCut={handleCut} onPaste={handlePaste} onDownload={handleDownload}
             onUpload={handleUpload} onRequestUpload={handleRequestUpload}
-            anchorPath={anchorPathRef.current} />
+            anchorPath={anchorPathRef.current} showToast={showToast} />
           <div className="fb-sidebar-resize-handle" role="none" tabIndex={-1} onMouseDown={handleResizeStart} />
         </div>
 
@@ -977,6 +1115,7 @@ export function FileManagerPage() {
           )}
         </div>
       </div>
+
     </MainContent>
   );
 }

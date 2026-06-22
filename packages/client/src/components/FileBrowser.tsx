@@ -2,8 +2,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { fetchJSON } from "../api/client";
 import "./FileBrowser.css";
 
-const LONG_PRESS_MS = 500;
-const MOVE_CANCEL_PX = 10;
+const _LONG_PRESS_MS = 500;
+const _MOVE_CANCEL_PX = 10;
 
 interface DirEntry {
   name: string;
@@ -60,6 +60,10 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
+  /** The specific DOM element that was long-pressed, so we can suppress its trailing click */
+  const longPressTargetRef = useRef<Element | null>(null);
+  /** Set by clickCapture when a long-press click is detected; checked by onClick to skip the action */
+  const skipNextClickRef = useRef(false);
   const isSelected = selectedPath === entry.path;
 
   const clearLongPress = useCallback(() => {
@@ -70,37 +74,36 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
     touchStartRef.current = null;
   }, []);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    if (!touch) return;
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-    longPressTriggeredRef.current = false;
-    longPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      onOpenMenu(touch.clientX, touch.clientY, entry.path, entry.isDir);
-    }, LONG_PRESS_MS);
-  }, [onOpenMenu, entry.path, entry.isDir]);
+  // On touch devices, the browser fires `contextmenu` after a long-press natively.
+  // We rely on that instead of a custom timer to open the menu, avoiding
+  // the WebKit touch sequence corruption bug.
+  const handleTouchStart = useCallback((_e: React.TouchEvent) => {
+    // No custom timer — the browser's native contextmenu event handles long-press
+  }, []);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dx = touch.clientX - touchStartRef.current.x;
-    const dy = touch.clientY - touchStartRef.current.y;
-    if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
-      clearLongPress();
-    }
-  }, [clearLongPress]);
+  const handleTouchMove = useCallback((_e: React.TouchEvent) => {
+    // No-op: no custom timer to cancel
+  }, []);
 
   const handleTouchEnd = useCallback(() => {
-    clearLongPress();
-  }, [clearLongPress]);
+    // Force-reset the triggered flag after a short delay (safety net)
+    setTimeout(() => {
+      longPressTriggeredRef.current = false;
+      longPressTargetRef.current = null;
+    }, 100);
+  }, []);
 
   const handleClickCapture = useCallback((e: React.MouseEvent) => {
-    if (longPressTriggeredRef.current) {
-      e.stopPropagation();
-      e.preventDefault();
+    // Suppress the synthetic click that mobile browsers fire ~300ms after a
+    // long-press touchend. Don't stopPropagation — that prevents the browser
+    // from clearing the :active state, freezing the UI on mobile.
+    if (
+      longPressTriggeredRef.current ||
+      longPressTargetRef.current === e.currentTarget
+    ) {
+      skipNextClickRef.current = true;
       longPressTriggeredRef.current = false;
+      longPressTargetRef.current = null;
     }
   }, []);
 
@@ -129,9 +132,13 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
   }, [entry.isDir, entry.path, expanded, loadChildren, onSelect]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    // Skip if long-press timer already opened the menu (mobile)
-    if (longPressTriggeredRef.current) return;
+    e.stopPropagation();
+    // Both desktop right-click and mobile long-press fire this event.
+    // IMPORTANT: do NOT call preventDefault() — it breaks WebKit's
+    // touch sequence tracking and freezes the page.
+    // Mark so the trailing synthetic click is suppressed.
+    longPressTriggeredRef.current = true;
+    longPressTargetRef.current = e.currentTarget;
     onOpenMenu(e.clientX, e.clientY, entry.path, entry.isDir);
   }, [onOpenMenu, entry.path, entry.isDir]);
 
@@ -184,13 +191,17 @@ function TreeNode({ entry, projectId, depth, selectedPath, onSelect, onDelete, o
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
         role="treeitem"
         tabIndex={0}
-        onClick={toggleExpand}
+        onClick={(_e) => {
+          if (skipNextClickRef.current) { skipNextClickRef.current = false; return; }
+          toggleExpand();
+        }}
         onClickCapture={handleClickCapture}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleExpand(); }}
         onContextMenu={handleContextMenu}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         {entry.isDir && (
           <span className={`tree-chevron ${expanded ? "expanded" : ""}`}>
@@ -309,16 +320,27 @@ export const FileBrowser = forwardRef<FileBrowserHandle, FileBrowserProps>(
     setSelectedPath(path);
   }, []);
 
-  // Close menu on outside click (desktop)
+  // Close menu on outside click / touch.
+  // Uses a flag to skip the trailing synthetic click that fires ~300 ms after a
+  // mobile long-press, which would otherwise close the just-opened menu.
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Element;
+    let justOpenedByLongPress = true;
+    const skipTimer = setTimeout(() => { justOpenedByLongPress = false; }, 600);
+
+    const handler = (e: Event) => {
+      const target = (e as MouseEvent).target as Element;
       if (target?.closest(".tree-context-menu")) return;
+      if (justOpenedByLongPress) return;
       setContextMenu(null);
     };
     document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      clearTimeout(skipTimer);
+      document.removeEventListener("click", handler);
+      document.removeEventListener("touchstart", handler);
+    };
   }, [contextMenu]);
 
   const handleMenuCreate = async (kind: "file" | "dir") => {

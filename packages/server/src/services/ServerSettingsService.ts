@@ -110,6 +110,12 @@ export interface ServerSettings {
    * delivered queued turns. Unset falls back to env `YA_COMPOSE_ANCHORS`.
    */
   composeAnchorsEnabled?: boolean;
+  /** Whether ntfy push notifications are enabled */
+  ntfyEnabled?: boolean;
+  /** ntfy server URL (default: https://ntfy.kdns.fr) */
+  ntfyUrl?: string;
+  /** ntfy topic (default: claude) */
+  ntfyTopic?: string;
 }
 
 export const CODEX_UPDATE_POLICIES = ["auto", "notify", "off"] as const;
@@ -130,6 +136,7 @@ export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   },
   lifecycleWebhooksEnabled: false,
   lifecycleWebhookDryRun: true,
+  ntfyEnabled: false,
   grokBuildUseXaiApiKey: false,
   codexUpdatePolicy: "notify",
   clientDefaults: DEFAULT_CLIENT_DEFAULTS,

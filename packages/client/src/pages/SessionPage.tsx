@@ -625,15 +625,14 @@ function SessionPageContent({
   const initialProvider = navState?.initialProvider;
   const clientTailParams = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    const urlTailTurns = parsePositiveIntegerParam(params.get("tailTurns"));
-    const urlTailFrom = params.get("tailFrom")?.trim() || undefined;
     return {
-      tailTurns: urlTailTurns ?? 30,
-      tailFrom: urlTailFrom,
-      explicitTail: urlTailTurns !== undefined || urlTailFrom !== undefined,
+      tailTurns: parsePositiveIntegerParam(params.get("tailTurns")),
+      tailFrom: params.get("tailFrom")?.trim() || undefined,
     };
   }, [location.search]);
-  const clientTailActive = clientTailParams.explicitTail;
+  const clientTailActive =
+    clientTailParams.tailTurns !== undefined ||
+    clientTailParams.tailFrom !== undefined;
 
   const updateClientTailParams = useCallback(
     (update: { tailTurns?: number; tailFrom?: string }) => {

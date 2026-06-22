@@ -111,6 +111,7 @@ import {
 import type { Message, Project } from "./supervisor/types.js";
 import type { EventBus } from "./watcher/index.js";
 import { LifecycleWebhookService } from "./webhooks/LifecycleWebhookService.js";
+import { NtfyService } from "./notifications/NtfyService.js";
 
 export interface AppOptions {
   /** Legacy SDK interface for mock SDK (for testing) */
@@ -605,6 +606,16 @@ export function createApp(options: AppOptions): AppResult {
     });
   }
 
+  let ntfyService: NtfyService | undefined;
+  if (options.eventBus && options.serverSettingsService) {
+    ntfyService = new NtfyService({
+      eventBus: options.eventBus,
+      supervisor,
+      serverSettingsService: options.serverSettingsService,
+      sessionMetadataService: options.sessionMetadataService,
+    });
+  }
+
   // Health check (outside /api — needs CORS for Tauri desktop app)
   app.use("/health", corsMiddleware);
   app.use("/health/*", corsMiddleware);
@@ -902,6 +913,7 @@ export function createApp(options: AppOptions): AppResult {
           grokACPProvider.setUseAmbientXaiApiKey(enabled);
         },
         publicShareService: options.publicShareService,
+        ntfyService,
       }),
     );
   }
