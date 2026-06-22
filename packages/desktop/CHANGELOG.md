@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.4] - 2026-06-22
+
+### Added
+- ntfy push notification service: session idle, waiting-input, and termination events
+- ntfy settings page with enable toggle, server URL, topic, and test button
+- File manager: copy/cut/paste files and directories
+- File manager: drag-and-drop to move files between directories
+- File manager: upload and download files from context menu and toolbar
+- File manager: multi-select with Ctrl+click and Shift+click
+- File manager: toast notifications for all operations (copy, paste, delete, rename, create)
+- File manager: tree row height setting in appearance settings (24-48px slider)
+- File manager: "Create session in this directory" in context menu
+- File manager: image preview when selecting image files
+
+### Fixed
+- Android file manager long-press freeze: transparent touch overlay blocks native contextmenu
+- Mobile user turn navigation showing system messages
+- "Load from this turn" not working due to message truncation
+- Mobile speech input icon rapid flickering
+- Android browser tab switch losing latest messages
+- Page refresh stuck at "load from this turn" position
+
 ## [0.0.3] - 2026-06-01
 
 ### Fixed
