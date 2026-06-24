@@ -535,6 +535,7 @@ export function createApp(options: AppOptions): AppResult {
     idleTimeoutMs: options.idleTimeoutMs,
     defaultPermissionMode: options.defaultPermissionMode,
     eventBus: options.eventBus,
+    notificationService: options.notificationService,
     maxWorkers: options.maxWorkers,
     idlePreemptThresholdMs: options.idlePreemptThresholdMs,
     maxQueueSize: options.maxQueueSize,
@@ -580,6 +581,7 @@ export function createApp(options: AppOptions): AppResult {
         eventBus: options.eventBus,
         supervisor,
         scanner,
+        notificationService: options.notificationService,
         decayMs: 30000, // 30 seconds
         // Callback to get session summary for new external sessions
         // projectId is now UrlProjectId (base64url) - ExternalSessionTracker converts it

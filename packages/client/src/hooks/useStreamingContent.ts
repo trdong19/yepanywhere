@@ -1,5 +1,5 @@
 import { getModelContextWindow } from "@yep-anywhere/shared";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ContentBlock, Message } from "../types";
 import { getStreamingEnabled } from "./useStreamingEnabled";
 
@@ -389,6 +389,20 @@ export function useStreamingContent(
     streamingThrottleRef.current.pendingIds.clear();
     streamingThrottleRef.current.pendingEventCount = 0;
   }, []);
+
+  // Flush pending streaming updates when tab becomes visible
+  // This prevents lag buildup when user switches away during streaming
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        flushStreamingUpdates();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [flushStreamingUpdates]);
 
   return {
     handleStreamEvent,

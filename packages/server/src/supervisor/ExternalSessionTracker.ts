@@ -6,6 +6,7 @@ import {
   asDirProjectId,
 } from "@yep-anywhere/shared";
 import { encodeProjectId } from "../projects/paths.js";
+import type { NotificationService } from "../notifications/NotificationService.js";
 import type { ProjectScanner } from "../projects/scanner.js";
 import { readFirstLine } from "../utils/jsonl.js";
 import { BatchProcessor } from "../watcher/BatchProcessor.js";
@@ -44,6 +45,8 @@ export interface ExternalSessionTrackerOptions {
   eventBus: EventBus;
   supervisor: Supervisor;
   scanner: ProjectScanner;
+  /** NotificationService for computing hasUnread state */
+  notificationService?: NotificationService;
   /** Time in ms before external status decays to idle (default: 30000) */
   decayMs?: number;
   /** Grace period in ms after abort before external detection resumes (default: 30000) */
@@ -69,6 +72,7 @@ export class ExternalSessionTracker {
   private eventBus: EventBus;
   private supervisor: Supervisor;
   private scanner: ProjectScanner;
+  private notificationService?: NotificationService;
   private decayMs: number;
   private abortGraceMs: number;
   private unsubscribe: (() => void) | null = null;
@@ -96,6 +100,7 @@ export class ExternalSessionTracker {
     this.eventBus = options.eventBus;
     this.supervisor = options.supervisor;
     this.scanner = options.scanner;
+    this.notificationService = options.notificationService;
     this.decayMs = options.decayMs ?? 30000;
     this.abortGraceMs = options.abortGraceMs ?? DEFAULT_ABORT_GRACE_MS;
     this.getSessionSummary = options.getSessionSummary;
@@ -151,6 +156,12 @@ export class ExternalSessionTracker {
                 updatedAt: summary.updatedAt,
                 contextUsage: summary.contextUsage,
                 model: summary.model,
+                hasUnread: summary.updatedAt
+                  ? this.notificationService?.hasUnread(
+                      sessionId,
+                      summary.updatedAt,
+                    ) ?? false
+                  : false,
                 timestamp: now,
               };
               this.eventBus.emit(event);
@@ -203,6 +214,12 @@ export class ExternalSessionTracker {
               updatedAt: summary.updatedAt,
               contextUsage: summary.contextUsage,
               model: summary.model,
+              hasUnread: summary.updatedAt
+                ? this.notificationService?.hasUnread(
+                    sessionId,
+                    summary.updatedAt,
+                  ) ?? false
+                : false,
               timestamp: now,
             };
             this.eventBus.emit(event);

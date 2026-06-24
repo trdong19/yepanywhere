@@ -926,6 +926,18 @@ export function createSettingsRoutes(deps: SettingsRoutesDeps): Hono {
       }
     }
 
+    if ("serverUrl" in body) {
+      if (
+        body.serverUrl === undefined ||
+        body.serverUrl === null ||
+        body.serverUrl === ""
+      ) {
+        updates.serverUrl = undefined;
+      } else if (typeof body.serverUrl === "string") {
+        updates.serverUrl = body.serverUrl.replace(/\/+$/, "").slice(0, 2000);
+      }
+    }
+
     if ("codexUpdatePolicy" in body) {
       if (
         body.codexUpdatePolicy === undefined ||

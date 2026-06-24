@@ -287,6 +287,24 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
 
       setSessions((prev) => {
         const result = reconcileGlobalSessionsProcessState(prev, event);
+        // Update hasUnread if the event carries it (e.g., when session goes idle)
+        // Skip if the user is currently viewing this session (engagement tracking will handle it)
+        if (event.hasUnread !== undefined) {
+          const currentSessionMatch = window.location.pathname.match(
+            /\/sessions\/([^/?#]+)/,
+          );
+          const currentSessionId = currentSessionMatch?.[1];
+          const isCurrentSession = event.sessionId === currentSessionId;
+
+          result.sessions = result.sessions.map((session) =>
+            session.id === event.sessionId
+              ? {
+                  ...session,
+                  hasUnread: isCurrentSession ? false : event.hasUnread,
+                }
+              : session,
+          );
+        }
         return result.sessions;
       });
 
@@ -414,6 +432,7 @@ export function useGlobalSessions(options: UseGlobalSessionsOptions = {}) {
             contextUsage: event.contextUsage,
           }),
           ...(event.model !== undefined && { model: event.model }),
+          ...(event.hasUnread !== undefined && { hasUnread: event.hasUnread }),
         };
       }),
     );

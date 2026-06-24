@@ -116,6 +116,10 @@ export interface ServerSettings {
   ntfyUrl?: string;
   /** ntfy topic (default: claude) */
   ntfyTopic?: string;
+  /** Whether to include session URL in ntfy notifications */
+  ntfySessionLink?: boolean;
+  /** Server external URL for generating session links (e.g., https://192.168.1.100:3500) */
+  serverUrl?: string;
 }
 
 export const CODEX_UPDATE_POLICIES = ["auto", "notify", "off"] as const;

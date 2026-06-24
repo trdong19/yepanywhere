@@ -1529,6 +1529,10 @@ export interface ServerSettings {
   ntfyUrl?: string;
   /** ntfy topic */
   ntfyTopic?: string;
+  /** Whether to include session URL in ntfy notifications */
+  ntfySessionLink?: boolean;
+  /** Server external URL for generating session links */
+  serverUrl?: string;
 }
 
 export type RelayClientStatus =

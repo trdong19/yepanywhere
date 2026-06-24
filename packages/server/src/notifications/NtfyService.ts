@@ -141,11 +141,29 @@ export class NtfyService {
 
     const title = sessionTitle || "Yep Anywhere";
 
+    // Build notification body with optional session link
+    let body = `${title}\n${input.message}`;
+    let clickUrl: string | undefined;
+    if (settings.ntfySessionLink !== false) {
+      const baseUrl = this.resolveBaseUrl(settings);
+      if (baseUrl) {
+        clickUrl = `${baseUrl}/projects/${input.projectId}/sessions/${input.sessionId}`;
+        body += `\n${clickUrl}`;
+      }
+    }
+
     try {
+      const headers: Record<string, string> = {
+        "content-type": "text/plain; charset=utf-8",
+      };
+      if (clickUrl) {
+        headers.Click = clickUrl;
+      }
+
       const response = await fetch(url, {
         method: "POST",
-        headers: { "content-type": "text/plain; charset=utf-8" },
-        body: `${title}\n${input.message}`,
+        headers,
+        body,
       });
 
       if (!response.ok) {
@@ -193,6 +211,28 @@ export class NtfyService {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
+  }
+
+  private resolveBaseUrl(
+    settings: import("../services/ServerSettingsService.js").ServerSettings,
+  ): string | null {
+    // Use explicit server URL if configured
+    if (settings.serverUrl) {
+      return settings.serverUrl.replace(/\/+$/, "");
+    }
+
+    // Construct from HOST/PORT environment variables
+    const host = process.env.HOST || "127.0.0.1";
+    const port = process.env.PORT || "3400";
+
+    // Replace 0.0.0.0 with localhost for clickable URL
+    const displayHost = host === "0.0.0.0" ? "localhost" : host;
+
+    // Use HTTPS if TLS is configured, otherwise HTTP
+    const protocol =
+      process.env.TLS_CERT_PATH || process.env.HTTPS ? "https" : "http";
+
+    return `${protocol}://${displayHost}:${port}`;
   }
 
   private getSessionTitle(sessionId: string): string | null {

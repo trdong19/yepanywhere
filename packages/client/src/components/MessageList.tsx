@@ -2741,15 +2741,31 @@ export const MessageList = memo(function MessageList({
   }, [forceScrollToCurrent, scrollTrigger]);
 
   // Initial scroll to bottom on first render
+  // Use forceScrollToCurrent with catch-up delays to handle async message loading
+  // and markdown rendering that arrives in waves after the initial data load
   useEffect(() => {
     if (isInitialLoadRef.current && displayRenderItems.length > 0) {
-      const container = containerRef.current?.parentElement;
-      if (container) {
-        scrollToBottom(container);
-      }
       isInitialLoadRef.current = false;
+      forceScrollToCurrent(FOLLOW_CATCH_UP_DELAYS_MS);
     }
-  }, [displayRenderItems.length, scrollToBottom]);
+  }, [displayRenderItems.length, forceScrollToCurrent]);
+
+  // Scroll to bottom immediately when tab becomes visible
+  // Prevents visible lag after switching back from another tab during streaming
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && shouldAutoScrollRef.current) {
+        const container = containerRef.current?.parentElement;
+        if (container) {
+          scrollToBottom(container);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [scrollToBottom]);
 
   const searchPanelTarget =
     userTurnSearch.active && typeof document !== "undefined"

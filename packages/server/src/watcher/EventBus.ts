@@ -80,6 +80,8 @@ export interface ProcessStateEvent {
   activity: AgentActivity;
   /** Type of pending input (only set when activity is "waiting-input") */
   pendingInputType?: PendingInputType;
+  /** Whether the session has unread content (set when activity is "idle") */
+  hasUnread?: boolean;
   timestamp: string;
 }
 
@@ -182,6 +184,8 @@ export interface SessionUpdatedEvent {
   contextUsage?: ContextUsage;
   /** Resolved model name (e.g., "claude-sonnet-4-5-20250929") */
   model?: string;
+  /** Whether the session has unread content */
+  hasUnread?: boolean;
   timestamp: string;
 }
 

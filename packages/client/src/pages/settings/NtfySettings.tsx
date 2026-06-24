@@ -13,6 +13,8 @@ export function NtfySettings() {
   const [enabled, setEnabled] = useState(false);
   const [url, setUrl] = useState("");
   const [topic, setTopic] = useState("");
+  const [sessionLink, setSessionLink] = useState(true);
+  const [srvUrl, setSrvUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [hasDraftEdits, setHasDraftEdits] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -21,33 +23,42 @@ export function NtfySettings() {
   const [formSynced, setFormSynced] = useState(false);
 
   const serverEnabled = settings?.ntfyEnabled ?? false;
-  const serverUrl = settings?.ntfyUrl ?? "";
+  const serverNtfyUrl = settings?.ntfyUrl ?? "";
   const serverTopic = settings?.ntfyTopic ?? "";
+  const serverSessionLink = settings?.ntfySessionLink ?? true;
+  const serverSrvUrl = settings?.serverUrl ?? "";
   const normalizedUrl = url.trim();
   const normalizedTopic = topic.trim();
+  const normalizedSrvUrl = srvUrl.trim();
   const hasChanges =
     enabled !== serverEnabled ||
-    normalizedUrl !== serverUrl ||
-    normalizedTopic !== serverTopic;
+    normalizedUrl !== serverNtfyUrl ||
+    normalizedTopic !== serverTopic ||
+    sessionLink !== serverSessionLink ||
+    normalizedSrvUrl !== serverSrvUrl;
 
   useEffect(() => {
     if (!settings) return;
     if (hasDraftEdits || isSaving) return;
     setEnabled(serverEnabled);
-    setUrl(serverUrl);
+    setUrl(serverNtfyUrl);
     setTopic(serverTopic);
+    setSessionLink(serverSessionLink);
+    setSrvUrl(serverSrvUrl);
     setFormSynced(true);
-  }, [hasDraftEdits, isSaving, serverEnabled, serverTopic, serverUrl, settings]);
+  }, [hasDraftEdits, isSaving, serverEnabled, serverNtfyUrl, serverTopic, serverSessionLink, serverSrvUrl, settings]);
 
   const undoState = useMemo(
-    () => (formSynced ? { enabled, url, topic } : null),
-    [formSynced, enabled, url, topic],
+    () => (formSynced ? { enabled, url, topic, sessionLink, srvUrl } : null),
+    [formSynced, enabled, url, topic, sessionLink, srvUrl],
   );
   const restoreUndoState = useCallback(
     (snapshot: NonNullable<typeof undoState>) => {
       setEnabled(snapshot.enabled);
       setUrl(snapshot.url);
       setTopic(snapshot.topic);
+      setSessionLink(snapshot.sessionLink);
+      setSrvUrl(snapshot.srvUrl);
       setSaveError(null);
       setHasDraftEdits(true);
     },
@@ -63,6 +74,8 @@ export function NtfySettings() {
         ntfyEnabled: enabled,
         ntfyUrl: normalizedUrl || undefined,
         ntfyTopic: normalizedTopic || undefined,
+        ntfySessionLink: sessionLink,
+        serverUrl: normalizedSrvUrl || undefined,
       });
       setHasDraftEdits(false);
     } catch (err) {
@@ -72,7 +85,7 @@ export function NtfySettings() {
     } finally {
       setIsSaving(false);
     }
-  }, [enabled, normalizedTopic, normalizedUrl, t, updateSettings]);
+  }, [enabled, normalizedTopic, normalizedUrl, sessionLink, normalizedSrvUrl, t, updateSettings]);
 
   const handleTest = useCallback(async () => {
     if (!enabled) return;
@@ -168,6 +181,49 @@ export function NtfySettings() {
               setSaveError(null);
             }}
             placeholder="claude"
+            spellCheck={false}
+          />
+        </div>
+
+        <label className="settings-item">
+          <div className="settings-item-info">
+            <strong>{t("ntfySessionLinkTitle")}</strong>
+            <p>{t("ntfySessionLinkHint")}</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={sessionLink}
+            onChange={(e) => {
+              setSessionLink(e.target.checked);
+              setHasDraftEdits(true);
+              setSaveError(null);
+            }}
+          />
+        </label>
+
+        <div
+          className="settings-item"
+          style={{ flexDirection: "column", alignItems: "stretch" }}
+        >
+          <div className="settings-item-info">
+            <strong>{t("ntfyServerUrlTitle")}</strong>
+            <p>{t("ntfyServerUrlHint")}</p>
+          </div>
+          <input
+            aria-label={t("ntfyServerUrlTitle")}
+            autoComplete="off"
+            type="url"
+            className="settings-input"
+            id="ntfy-server-url"
+            name="yep-ntfy-server-url"
+            value={srvUrl}
+            onChange={(e) => {
+              const value = e.target.value.slice(0, MAX_URL_LENGTH);
+              setSrvUrl(value);
+              setHasDraftEdits(true);
+              setSaveError(null);
+            }}
+            placeholder="https://192.168.1.100:3500"
             spellCheck={false}
           />
         </div>

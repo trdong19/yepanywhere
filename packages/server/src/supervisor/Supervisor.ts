@@ -13,6 +13,7 @@ import {
 } from "@yep-anywhere/shared";
 import type { AgentActivity, PendingInputType } from "@yep-anywhere/shared";
 import { getLogger } from "../logging/logger.js";
+import type { NotificationService } from "../notifications/NotificationService.js";
 import { getProvider } from "../sdk/providers/index.js";
 import type { AgentProvider } from "../sdk/providers/types.js";
 import { normalizeSlashCommandName } from "../sdk/slashCommandEmulation.js";
@@ -344,6 +345,8 @@ export interface SupervisorOptions {
   defaultPermissionMode?: PermissionMode;
   /** EventBus for emitting session status changes */
   eventBus?: EventBus;
+  /** NotificationService for computing hasUnread state */
+  notificationService?: NotificationService;
   /** Maximum concurrent workers. 0 = unlimited (default for backward compat) */
   maxWorkers?: number;
   /** Idle threshold in milliseconds for preemption. Workers idle longer than this can be preempted. */
@@ -378,6 +381,7 @@ export class Supervisor {
   private idleTimeoutMs?: number;
   private defaultPermissionMode: PermissionMode;
   private eventBus?: EventBus;
+  private notificationService?: NotificationService;
   private maxWorkers: number;
   private idlePreemptThresholdMs: number;
   private workerQueue: WorkerQueue;
@@ -410,6 +414,7 @@ export class Supervisor {
     this.idleTimeoutMs = options.idleTimeoutMs;
     this.defaultPermissionMode = options.defaultPermissionMode ?? "default";
     this.eventBus = options.eventBus;
+    this.notificationService = options.notificationService;
     this.maxWorkers = options.maxWorkers ?? 0; // 0 = unlimited
     this.idlePreemptThresholdMs =
       options.idlePreemptThresholdMs ?? DEFAULT_IDLE_PREEMPT_THRESHOLD_MS;
@@ -3021,18 +3026,42 @@ export class Supervisor {
       updatedAt: summary.updatedAt,
       contextUsage: summary.contextUsage,
       model: summary.model,
+      hasUnread: summary.updatedAt
+        ? this.notificationService?.hasUnread(
+            sessionId,
+            summary.updatedAt,
+          ) ?? false
+        : false,
       timestamp: new Date().toISOString(),
     };
     this.eventBus.emit(event);
   }
 
-  private emitAgentActivityChange(
+  private async emitAgentActivityChange(
     sessionId: string,
     projectId: UrlProjectId,
     activity: AgentActivity,
     pendingInputType?: PendingInputType,
-  ): void {
+  ): Promise<void> {
     if (!this.eventBus) return;
+
+    // Compute hasUnread when process goes idle (session completed)
+    let hasUnread: boolean | undefined;
+    if (activity === "idle" && this.notificationService) {
+      try {
+        const summary = this.onSessionSummary
+          ? await this.onSessionSummary(sessionId, projectId)
+          : null;
+        if (summary?.updatedAt) {
+          hasUnread = this.notificationService.hasUnread(
+            sessionId,
+            summary.updatedAt,
+          );
+        }
+      } catch {
+        // Ignore errors computing hasUnread
+      }
+    }
 
     const event: ProcessStateEvent = {
       type: "process-state-changed",
@@ -3040,6 +3069,7 @@ export class Supervisor {
       projectId,
       activity,
       pendingInputType,
+      hasUnread,
       timestamp: new Date().toISOString(),
     };
     this.eventBus.emit(event);

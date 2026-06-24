@@ -38,6 +38,7 @@ export interface ProcessStateChangedInput {
   projectId?: UrlProjectId;
   activity: AgentActivity;
   pendingInputType?: PendingInputType;
+  hasUnread?: boolean;
 }
 
 export interface SessionStatusChangedInput {
@@ -56,6 +57,7 @@ export interface SessionUpdatedInput {
   title?: string | null;
   customTitle?: string | null;
   updatedAt?: string;
+  hasUnread?: boolean;
 }
 
 export interface SessionCreatedInput {
@@ -167,15 +169,17 @@ export function applyProcessStateChanged(
   observedAt = Date.now(),
 ): Map<string, SessionLifecycle> {
   const entry = withProjectId(getEntry(state, event.sessionId), event.projectId);
-  return putEntry(
-    state,
-    applyActivityFields(
-      entry,
-      event.activity,
-      event.pendingInputType,
-      observedAt,
-    ),
+  const updated = applyActivityFields(
+    entry,
+    event.activity,
+    event.pendingInputType,
+    observedAt,
   );
+  // Apply hasUnread if present in the event
+  if (event.hasUnread !== undefined) {
+    updated.hasUnread = event.hasUnread;
+  }
+  return putEntry(state, updated);
 }
 
 export function applySessionStatusChanged(
@@ -245,6 +249,7 @@ export function applySessionUpdated(
       ? { customTitle: event.customTitle }
       : {}),
     ...(event.updatedAt !== undefined ? { updatedAt: event.updatedAt } : {}),
+    ...(event.hasUnread !== undefined ? { hasUnread: event.hasUnread } : {}),
     metadataObservedAt: observedAt,
   });
 }
