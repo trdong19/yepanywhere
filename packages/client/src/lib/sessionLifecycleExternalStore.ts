@@ -44,18 +44,7 @@ function updateSnapshot(
 }
 
 function reduceProcessStateChanged(event: ProcessStateEvent): void {
-  // Skip hasUnread if user is currently viewing this session
-  const currentSessionMatch =
-    typeof window !== "undefined"
-      ? window.location.pathname.match(/\/sessions\/([^/?#]+)/)
-      : null;
-  const isCurrentSession =
-    event.sessionId === currentSessionMatch?.[1];
-  const adjustedEvent =
-    isCurrentSession && event.hasUnread === true
-      ? { ...event, hasUnread: false }
-      : event;
-  updateSnapshot((current) => applyProcessStateChanged(current, adjustedEvent));
+  updateSnapshot((current) => applyProcessStateChanged(current, event));
 }
 
 function reduceSessionStatusChanged(event: SessionStatusEvent): void {
@@ -73,7 +62,6 @@ function reduceSessionUpdated(event: SessionUpdatedEvent): void {
       projectId: event.projectId,
       title: event.title,
       updatedAt: event.updatedAt,
-      hasUnread: event.hasUnread,
     }),
   );
 }

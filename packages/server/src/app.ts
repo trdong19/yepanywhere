@@ -6,6 +6,7 @@ import type {
   UrlProjectId,
 } from "@yep-anywhere/shared";
 import { Hono } from "hono";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AuthService } from "./auth/AuthService.js";
 import { createAuthRoutes } from "./auth/routes.js";
@@ -403,6 +404,18 @@ export function createApp(options: AppOptions): AppResult {
               projectPath: project.path,
             }),
         );
+      case "mimo-acp":
+        // MiMo Code uses OpenCode-compatible session format (HTTP/SSE API)
+        // Storage is at ~/.local/share/mimocode/ instead of ~/.local/share/opencode/
+        return getOrCreateReader(
+          `mimo::${project.path}`,
+          () =>
+            new OpenCodeSessionReader({
+              projectPath: project.path,
+              storageDir: join(homedir(), ".local", "share", "mimocode", "storage"),
+              databasePath: join(homedir(), ".local", "share", "mimocode", "mimocode.db"),
+            }),
+        );
     }
   };
   const codexReaderFactory = (projectPath: string): CodexSessionReader =>
@@ -535,7 +548,6 @@ export function createApp(options: AppOptions): AppResult {
     idleTimeoutMs: options.idleTimeoutMs,
     defaultPermissionMode: options.defaultPermissionMode,
     eventBus: options.eventBus,
-    notificationService: options.notificationService,
     maxWorkers: options.maxWorkers,
     idlePreemptThresholdMs: options.idlePreemptThresholdMs,
     maxQueueSize: options.maxQueueSize,
@@ -581,7 +593,6 @@ export function createApp(options: AppOptions): AppResult {
         eventBus: options.eventBus,
         supervisor,
         scanner,
-        notificationService: options.notificationService,
         decayMs: 30000, // 30 seconds
         // Callback to get session summary for new external sessions
         // projectId is now UrlProjectId (base64url) - ExternalSessionTracker converts it

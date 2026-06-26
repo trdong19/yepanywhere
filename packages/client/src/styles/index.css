@@ -1696,23 +1696,7 @@ a.sidebar-nav-item {
   white-space: nowrap;
 }
 
-/* Unread sessions: bold + bright text + red dot */
-.recent-session-item.unread {
-  position: relative;
-}
-
-.recent-session-item.unread::after {
-  content: "";
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 6px;
-  background: #ef4444;
-  border-radius: 50%;
-}
-
+/* Unread sessions: bold + bright text */
 .recent-session-item.unread .recent-session-title {
   font-weight: 600;
   color: var(--text-primary);
@@ -9377,7 +9361,7 @@ a.sidebar-nav-item {
   font-weight: 400;
 }
 
-/* Unread session - Gmail-style bold/bright + red dot */
+/* Unread session - Gmail-style bold/bright instead of badge */
 .session-list li.unread > a strong {
   color: var(--text-primary);
   font-weight: 700;
@@ -9386,18 +9370,6 @@ a.sidebar-nav-item {
 .sidebar-session-list li.unread > a {
   color: var(--text-primary);
   font-weight: 700;
-}
-
-.sidebar-session-list li.unread::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 6px;
-  background: #ef4444;
-  border-radius: 50%;
 }
 
 /* ==========================================================================
@@ -12703,7 +12675,7 @@ a.sidebar-nav-item {
   font-weight: 400;
 }
 
-/* Unread indicator: bright text + bold + green dot + red dot */
+/* Unread indicator: bright text and bold */
 .session-list-item.unread .session-list-item__title-text,
 .session-list-item.unread .session-list-item__title {
   color: var(--text-primary);
@@ -12719,18 +12691,6 @@ a.sidebar-nav-item {
   width: 6px;
   height: 6px;
   background: var(--app-yep-green);
-  border-radius: 50%;
-}
-
-.session-list-item--compact.unread::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 6px;
-  background: #ef4444;
   border-radius: 50%;
 }
 

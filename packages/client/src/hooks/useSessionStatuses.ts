@@ -91,21 +91,10 @@ export function useSessionStatuses(
           const pendingInputType =
             event.activity === "in-turn" ? undefined : current.pendingInputType;
 
-          // Skip hasUnread if user is currently viewing this session
-          const currentSessionMatch = window.location.pathname.match(
-            /\/sessions\/([^/?#]+)/,
-          );
-          const isCurrentSession =
-            event.sessionId === currentSessionMatch?.[1];
-
           next.set(event.sessionId, {
             ...current,
             activity: event.activity,
             pendingInputType,
-            // Update hasUnread if the event carries it (e.g., when session goes idle)
-            ...(event.hasUnread !== undefined && {
-              hasUnread: isCurrentSession ? false : event.hasUnread,
-            }),
           });
           return next;
         });
@@ -146,24 +135,6 @@ export function useSessionStatuses(
           next.set(event.sessionId, {
             ...current,
             hasUnread: false,
-          });
-          return next;
-        });
-      }),
-    );
-
-    // Session updated events (carries hasUnread)
-    unsubscribers.push(
-      activityBus.on("session-updated", (event) => {
-        if (!sessionIdSetRef.current.has(event.sessionId)) return;
-        if (event.hasUnread === undefined) return;
-
-        setStatuses((prev) => {
-          const next = new Map(prev);
-          const current = next.get(event.sessionId) ?? {};
-          next.set(event.sessionId, {
-            ...current,
-            hasUnread: event.hasUnread,
           });
           return next;
         });

@@ -438,17 +438,9 @@ export function SessionListItem({
         return;
       }
 
-      // Immediately mark as read on click for instant UI feedback
-      if (hasUnread) {
-        setLocalHasUnread(false);
-        api.markSessionSeen(sessionId).catch((err: unknown) => {
-          console.error("Failed to mark session seen on click:", err);
-        });
-      }
-
       onNavigate?.();
     },
-    [isSelectionMode, onNavigate, sessionHref, hasUnread, sessionId],
+    [isSelectionMode, onNavigate, sessionHref],
   );
 
   const handleSessionMouseDown = useCallback(
