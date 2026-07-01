@@ -404,18 +404,6 @@ export function createApp(options: AppOptions): AppResult {
               projectPath: project.path,
             }),
         );
-      case "mimo-acp":
-        // MiMo Code uses OpenCode-compatible session format (HTTP/SSE API)
-        // Storage is at ~/.local/share/mimocode/ instead of ~/.local/share/opencode/
-        return getOrCreateReader(
-          `mimo::${project.path}`,
-          () =>
-            new OpenCodeSessionReader({
-              projectPath: project.path,
-              storageDir: join(homedir(), ".local", "share", "mimocode", "storage"),
-              databasePath: join(homedir(), ".local", "share", "mimocode", "mimocode.db"),
-            }),
-        );
     }
   };
   const codexReaderFactory = (projectPath: string): CodexSessionReader =>

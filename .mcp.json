@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mimo-image-reader": {
+      "command": "python3",
+      "args": [
+        "/home/d/.claude/mcp-servers/mimo-image-reader/server.py"
+      ],
+      "env": {
+        "MIMO_API_KEY": "tp-cjp3zp9uqrqpsr32svret5tgqvnxe8xgeyfhaedfmjsmr4b3"
+      }
+    }
+  }
+}
