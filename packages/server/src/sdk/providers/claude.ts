@@ -714,34 +714,9 @@ export class ClaudeProvider implements AgentProvider {
    * Falls back to static list if probe fails or user is not authenticated.
    */
   async getAvailableModels(): Promise<ModelInfo[]> {
-    // Return cached models if available
-    if (cachedModels) {
-      return cachedModels;
-    }
-
-    // Check if user is authenticated before trying to probe
-    const authStatus = await this.getAuthStatus();
-    if (!authStatus.authenticated) {
-      return CLAUDE_MODELS_FALLBACK;
-    }
-
-    // If probe is already in progress, wait for it
-    if (probePromise) {
-      return probePromise;
-    }
-
-    // Start a new probe
-    probePromise = this.probeModels();
-    try {
-      const models = await probePromise;
-      cachedModels = mergeClaudeModels(models);
-      return cachedModels;
-    } catch (error) {
-      console.warn("[Claude] Failed to probe models, using fallback:", error);
-      return CLAUDE_MODELS_FALLBACK;
-    } finally {
-      probePromise = null;
-    }
+    // Use static fallback list only - covers all main Claude models
+    // without SDK-probed duplicates (dated variants like claude-sonnet-4-5-*)
+    return CLAUDE_MODELS_FALLBACK.map((model) => enrichClaudeModel(model));
   }
 
   /**
